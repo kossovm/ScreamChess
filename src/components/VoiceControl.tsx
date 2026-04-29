@@ -38,10 +38,13 @@ export default function VoiceControl({ lang, disabled, onMove, hotkey = 'v' }: P
   const { locale, t } = useLanguage();
   const effectiveLang = lang ?? (locale === 'ru' ? 'ru-RU' : 'en-US');
 
-  const [engine, setEngine] = useState<Engine>(() => {
-    if (typeof window === 'undefined') return 'cloud';
-    return ((localStorage.getItem('voice-engine') as Engine) ?? 'cloud');
-  });
+  // Initial value must be deterministic across server/client to avoid hydration mismatch;
+  // localStorage is read in the effect below.
+  const [engine, setEngine] = useState<Engine>('cloud');
+  useEffect(() => {
+    const stored = localStorage.getItem('voice-engine') as Engine | null;
+    if (stored === 'cloud' || stored === 'local') setEngine(stored);
+  }, []);
 
   // Both hooks always mounted; we just route start/stop to the active one.
   const cloud = useVoiceCommand({ lang: effectiveLang });
@@ -96,19 +99,28 @@ export default function VoiceControl({ lang, disabled, onMove, hotkey = 'v' }: P
   };
 
   const handleStart = () => {
+    console.log('[VoiceControl] handleStart() · engine=', engine, 'disabled=', disabled, 'gameOver=', isGameOver, 'listening=', active.listening);
     if (disabled || isGameOver || active.listening) return;
     active.start((res) => handleResult(res.transcript, res.durationMs, res.confidence));
   };
 
   // Global hotkey
   useEffect(() => {
-    if (!active.supported) return;
+    if (!active.supported) {
+      console.log('[VoiceControl] hotkey not bound · active.supported=false');
+      return;
+    }
+    console.log('[VoiceControl] hotkey listener mounted, key=', hotkey, 'engine=', engine);
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== hotkey.toLowerCase()) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
+        console.log('[VoiceControl] V ignored, target is input/textarea');
+        return;
+      }
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+      console.log('[VoiceControl] V pressed · listening=', active.listening);
       e.preventDefault();
       if (active.listening) active.stop();
       else handleStart();
@@ -118,7 +130,9 @@ export default function VoiceControl({ lang, disabled, onMove, hotkey = 'v' }: P
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active.supported, active.listening, hotkey, isGameOver, disabled, chess, engine]);
 
-  useEffect(() => () => { cloud.stop(); local.stop(); }, [cloud, local]);
+  // Don't add a global stop() cleanup here — both hooks already clean up on
+  // actual unmount, and `cloud`/`local` references change on every render,
+  // which would tear down the audio pipeline mid-recognition.
 
   if (engine === 'cloud' && !cloud.supported) {
     return (

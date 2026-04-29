@@ -10,13 +10,13 @@ import PsychoReport from '@/components/PsychoReport';
 import { useGameStore } from '@/store/gameStore';
 import { useStockfish } from '@/hooks/useStockfish';
 import { useT } from '@/components/LanguageProvider';
-import { RefreshCw, Cpu } from 'lucide-react';
+import { RefreshCw, Cpu, Undo2 } from 'lucide-react';
 
 const LEVEL_TO_SKILL = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 const LEVEL_TO_DEPTH = [4, 5, 6, 7, 8, 10, 12, 14, 16, 18, 20];
 
 export default function AIPlayPage() {
-  const { fen, makeMove, reset, chess, isGameOver, result, history } = useGameStore();
+  const { fen, makeMove, reset, chess, isGameOver, result, history, undo } = useGameStore();
   const { ready, findBestMove, evaluate, stop } = useStockfish();
   const t = useT();
   const [level, setLevel] = useState(3);
@@ -69,6 +69,23 @@ export default function AIPlayPage() {
           </label>
           <button onClick={() => { reset(); setOrientation((o) => (o === 'white' ? 'black' : 'white')); }} className="btn-ghost text-sm">
             {t('play.switchSides')}
+          </button>
+          <button
+            onClick={() => {
+              stop();
+              thinkingRef.current = true; // block AI auto-reply during undo
+              const aiSide = orientation === 'white' ? 'b' : 'w';
+              // pop until it's our turn again (typically 2 moves: AI's reply + ours)
+              const toPop = chess.turn() === aiSide ? 1 : 2;
+              undo(toPop);
+              setEvalCp(null);
+              setEvalMate(null);
+              setTimeout(() => { thinkingRef.current = false; }, 50);
+            }}
+            disabled={history.length === 0}
+            className="btn-ghost flex items-center gap-2 text-sm disabled:opacity-50"
+          >
+            <Undo2 className="w-4 h-4" /> {t('play.undo')}
           </button>
           <button onClick={() => { stop(); reset(); }} className="btn-ghost flex items-center gap-2"><RefreshCw className="w-4 h-4" /> {t('play.newGameShort')}</button>
         </div>

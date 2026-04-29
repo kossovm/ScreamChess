@@ -37,7 +37,7 @@ export function useVoskRecognition(opts: { lang?: string } = {}) {
   const recRef = useRef<any>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const workletRef = useRef<AudioWorkletNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const startTimeRef = useRef<number>(0);
   const onResultRef = useRef<((r: VoiceResult) => void) | null>(null);
@@ -98,17 +98,23 @@ export function useVoskRecognition(opts: { lang?: string } = {}) {
   }, [opts.lang]);
 
   const cleanupAudio = useCallback(() => {
-    try { processorRef.current?.disconnect(); } catch {}
+    try { workletRef.current?.disconnect(); } catch {}
+    try { workletRef.current?.port?.close(); } catch {}
     try { sourceRef.current?.disconnect(); } catch {}
     try { streamRef.current?.getTracks().forEach((t) => t.stop()); } catch {}
     try { audioCtxRef.current?.close(); } catch {}
-    processorRef.current = null;
+    workletRef.current = null;
     sourceRef.current = null;
     streamRef.current = null;
     audioCtxRef.current = null;
   }, []);
 
   const start = useCallback(async (cb?: (r: VoiceResult) => void) => {
+    if (listening || streamRef.current) {
+      console.warn('[vosk] start() ignored — already listening');
+      return;
+    }
+    console.log('[vosk] start() invoked');
     onResultRef.current = cb ?? null;
     startTimeRef.current = Date.now();
     setTranscript('');
@@ -116,18 +122,36 @@ export function useVoskRecognition(opts: { lang?: string } = {}) {
 
     let model: any;
     try {
+      console.log('[vosk] ensuring model…');
       model = await ensureModel();
-    } catch {
+    } catch (e) {
+      console.error('[vosk] ensureModel failed', e);
       setListening(false);
       return;
     }
 
     try {
-      const recognizer = new model.KaldiRecognizer(16000);
+      console.log('[vosk] requesting mic…');
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+      console.log('[vosk] mic granted, tracks:', stream.getAudioTracks().map((t) => t.label));
+      streamRef.current = stream;
+
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtxRef.current = audioCtx;
+      if (audioCtx.state === 'suspended') {
+        console.log('[vosk] AudioContext suspended, resuming…');
+        await audioCtx.resume();
+      }
+      console.log('[vosk] AudioContext state=', audioCtx.state, 'sampleRate=', audioCtx.sampleRate);
+
+      // Recognizer rate MUST match the audio context rate (typically 48000 in Chrome).
+      const recognizer = new model.KaldiRecognizer(audioCtx.sampleRate);
       recognizer.setWords?.(true);
       recognizer.on('result', (msg: any) => {
         const text: string = msg?.result?.text ?? '';
-        console.log('[vosk] result:', text);
+        console.log('[vosk] FINAL:', JSON.stringify(text));
         if (!text) return;
         setTranscript(text);
         if (onResultRef.current) {
@@ -141,38 +165,54 @@ export function useVoskRecognition(opts: { lang?: string } = {}) {
       });
       recognizer.on('partialresult', (msg: any) => {
         const partial: string = msg?.result?.partial ?? '';
-        if (partial) setTranscript(partial);
+        if (partial) {
+          console.log('[vosk] partial:', partial);
+          setTranscript(partial);
+        }
       });
       recRef.current = recognizer;
-
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
-      });
-      streamRef.current = stream;
-
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioCtxRef.current = audioCtx;
 
       const source = audioCtx.createMediaStreamSource(stream);
       sourceRef.current = source;
 
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-      processor.onaudioprocess = (event) => {
+      console.log('[vosk] loading audio worklet…');
+      await audioCtx.audioWorklet.addModule('/audio-worklets/vosk-recorder.js');
+      const worklet = new AudioWorkletNode(audioCtx, 'vosk-recorder', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+        channelCount: 1,
+        channelCountMode: 'explicit',
+      });
+      workletRef.current = worklet;
+
+      let frameCount = 0;
+      worklet.port.onmessage = (ev: MessageEvent<Float32Array>) => {
+        const samples = ev.data;
         try {
-          recognizer.acceptWaveform(event.inputBuffer);
-        } catch (e) {
-          console.error('[vosk] acceptWaveform error:', e);
+          // Vosk wants an AudioBuffer; build a one-channel buffer from the Float32Array
+          const audioBuffer = audioCtx.createBuffer(1, samples.length, audioCtx.sampleRate);
+          audioBuffer.getChannelData(0).set(samples);
+          recognizer.acceptWaveform(audioBuffer);
+          frameCount++;
+          if (frameCount === 5) console.log('[vosk] receiving audio frames OK');
+        } catch (err) {
+          console.error('[vosk] acceptWaveform error:', err);
         }
       };
-      processorRef.current = processor;
 
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
+      // The audio graph only pumps a node when its output reaches the destination.
+      // Route worklet → muted gain → destination so the graph stays live without echo.
+      const muted = audioCtx.createGain();
+      muted.gain.value = 0;
+      source.connect(worklet);
+      worklet.connect(muted);
+      muted.connect(audioCtx.destination);
 
       setListening(true);
-      console.log('[vosk] listening, sampleRate=', audioCtx.sampleRate);
+      console.log('[vosk] pipeline live · sampleRate=', audioCtx.sampleRate);
     } catch (e: any) {
-      console.error('[vosk] start failed:', e);
+      console.error('[vosk] start failed:', e?.name, e?.message, e);
       const code: VoiceErrorCode = e?.name === 'NotAllowedError' ? 'not-allowed'
         : e?.name === 'NotFoundError' ? 'audio-capture'
         : 'start-failed';

@@ -14,6 +14,7 @@ interface GameState {
   lastMove: { from: string; to: string } | null;
   reset: () => void;
   makeMove: (move: { from: string; to: string; promotion?: string }, emotion?: VoiceEmotion, voiceConfidence?: number) => boolean;
+  undo: (count?: number) => number;
   loadFen: (fen: string) => void;
   loadPgn: (pgn: string) => void;
 }
@@ -67,6 +68,29 @@ export const useGameStore = create<GameState>((set, get) => ({
     } catch {
       return false;
     }
+  },
+
+  undo: (count = 1) => {
+    const { chess, history } = get();
+    let popped = 0;
+    for (let i = 0; i < count; i++) {
+      if (history.length - popped <= 0) break;
+      const result = chess.undo();
+      if (!result) break;
+      popped++;
+    }
+    if (popped === 0) return 0;
+    const newHistory = history.slice(0, history.length - popped);
+    const last = newHistory[newHistory.length - 1];
+    set({
+      fen: chess.fen(),
+      history: newHistory,
+      turnStartedAt: Date.now(),
+      isGameOver: false,
+      result: null,
+      lastMove: last ? { from: last.from, to: last.to } : null,
+    });
+    return popped;
   },
 
   loadFen: (fen) => {
