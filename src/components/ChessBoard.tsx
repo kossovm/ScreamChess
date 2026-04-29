@@ -5,23 +5,49 @@ import { useGameStore } from '@/store/gameStore';
 import { useTheme } from './ThemeProvider';
 import { Square } from 'chess.js';
 import { useMemo } from 'react';
+import toast from 'react-hot-toast';
+import { useT } from './LanguageProvider';
 
 interface Props {
   orientation?: 'white' | 'black';
   disabled?: boolean;
+  /**
+   * If set, only pieces of this colour can be moved by this client (used in
+   * online play). When null/undefined, both sides can move (local play).
+   */
+  playerSide?: 'w' | 'b' | null;
   onMove?: (move: { from: string; to: string; promotion?: string }) => void;
   highlightSquares?: Record<string, React.CSSProperties>;
 }
 
-export default function ChessBoard({ orientation = 'white', disabled, onMove, highlightSquares }: Props) {
+export default function ChessBoard({ orientation = 'white', disabled, playerSide, onMove, highlightSquares }: Props) {
   const { fen, chess, lastMove, makeMove, isGameOver } = useGameStore();
   const { theme } = useTheme();
+  const t = useT();
 
-  const onPieceDrop = (from: string, to: string) => {
+  const onPieceDrop = (from: string, to: string, piece: string) => {
     if (disabled || isGameOver) return false;
+    // piece looks like 'wP', 'bN', etc. First char is colour.
+    const pieceColor = piece?.[0] as 'w' | 'b' | undefined;
+    if (playerSide && pieceColor && pieceColor !== playerSide) {
+      toast.error(t('online.notYourPiece'));
+      return false;
+    }
+    if (playerSide && chess.turn() !== playerSide) {
+      toast.error(t('online.notYourTurn'));
+      return false;
+    }
     const ok = makeMove({ from, to, promotion: 'q' });
     if (ok && onMove) onMove({ from, to, promotion: 'q' });
     return ok;
+  };
+
+  const isDraggablePiece = ({ piece }: { piece: string }) => {
+    if (disabled || isGameOver) return false;
+    const pieceColor = piece?.[0] as 'w' | 'b' | undefined;
+    if (playerSide && pieceColor && pieceColor !== playerSide) return false;
+    if (playerSide && chess.turn() !== playerSide) return false;
+    return true;
   };
 
   const customSquareStyles = useMemo(() => {
@@ -55,6 +81,7 @@ export default function ChessBoard({ orientation = 'white', disabled, onMove, hi
       <Chessboard
         position={fen}
         onPieceDrop={onPieceDrop}
+        isDraggablePiece={isDraggablePiece}
         boardOrientation={orientation}
         customBoardStyle={{ borderRadius: '14px', boxShadow: '0 10px 40px rgba(0,0,0,0.25)' }}
         customDarkSquareStyle={{ backgroundColor: darkSquareColor }}
