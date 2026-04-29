@@ -12,3 +12,6 @@ dist
 .idea
 .vscode
 next-env.d.ts
+
+# Vosk speech models (downloaded via `npm run setup:vosk`)
+public/vosk-models/*.tar.gz

@@ -2,6 +2,7 @@
 
 import { useGameStore } from '@/store/gameStore';
 import { evalToText } from '@/lib/chessUtils';
+import { useT } from './LanguageProvider';
 import { motion } from 'framer-motion';
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 
 export default function GameInfo({ white, black, evalCp = null, evalMate = null }: Props) {
   const { chess, history, isGameOver, result } = useGameStore();
+  const t = useT();
   const turn = chess.turn();
   const inCheck = chess.inCheck();
 
@@ -29,7 +31,7 @@ export default function GameInfo({ white, black, evalCp = null, evalMate = null 
         </div>
         {turn === 'b' && !isGameOver && (
           <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5 }} className="text-xs text-accent-500">
-            thinking…
+            {t('gameinfo.thinking')}
           </motion.span>
         )}
       </div>
@@ -52,15 +54,15 @@ export default function GameInfo({ white, black, evalCp = null, evalMate = null 
         </div>
         {turn === 'w' && !isGameOver && (
           <motion.span animate={{ opacity: [0.4, 1, 0.4] }} transition={{ repeat: Infinity, duration: 1.5 }} className="text-xs text-accent-500">
-            thinking…
+            {t('gameinfo.thinking')}
           </motion.span>
         )}
       </div>
 
       <div className="flex flex-wrap gap-2 text-xs">
-        {inCheck && <span className="px-2 py-1 rounded-full bg-red-500/20 text-red-400">CHECK</span>}
-        {isGameOver && <span className="px-2 py-1 rounded-full bg-amber-500/20 text-amber-400">GAME OVER · {result ?? '—'}</span>}
-        <span className="px-2 py-1 rounded-full bg-primary-500/20 text-primary-500">Move {Math.ceil(history.length / 2) + 1}</span>
+        {inCheck && <span className="px-2 py-1 rounded-full bg-red-500/20 text-red-400">{t('gameinfo.check')}</span>}
+        {isGameOver && <span className="px-2 py-1 rounded-full bg-amber-500/20 text-amber-400">{t('gameinfo.gameOver')} · {result ?? '—'}</span>}
+        <span className="px-2 py-1 rounded-full bg-primary-500/20 text-primary-500">{t('gameinfo.move')} {Math.ceil(history.length / 2) + 1}</span>
       </div>
     </div>
   );

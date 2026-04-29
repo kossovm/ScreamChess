@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { useT } from '@/components/LanguageProvider';
 import { Trophy, MapPin, Globe } from 'lucide-react';
 import type { LeaderEntry } from '@/types';
 
@@ -15,6 +16,7 @@ const MOCK: LeaderEntry[] = [
 ];
 
 export default function LeaderboardPage() {
+  const t = useT();
   const [tab, setTab] = useState<'global' | 'city'>('global');
   const [city, setCity] = useState('Almaty');
   const [entries, setEntries] = useState<LeaderEntry[]>(MOCK);
@@ -34,15 +36,15 @@ export default function LeaderboardPage() {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="flex items-center gap-3 mb-6">
         <Trophy className="w-8 h-8 text-amber-500" />
-        <h1 className="text-3xl font-display font-bold">Leaderboard</h1>
+        <h1 className="text-3xl font-display font-bold">{t('leaderboard.title')}</h1>
       </div>
 
       <div className="flex gap-2 mb-6">
         <button onClick={() => setTab('global')} className={tab === 'global' ? 'btn-primary' : 'btn-ghost'}>
-          <Globe className="w-4 h-4 inline mr-2" /> Global
+          <Globe className="w-4 h-4 inline mr-2" /> {t('leaderboard.global')}
         </button>
         <button onClick={() => setTab('city')} className={tab === 'city' ? 'btn-primary' : 'btn-ghost'}>
-          <MapPin className="w-4 h-4 inline mr-2" /> By City
+          <MapPin className="w-4 h-4 inline mr-2" /> {t('leaderboard.byCity')}
         </button>
         {tab === 'city' && (
           <select value={city} onChange={(e) => setCity(e.target.value)} className="input w-auto">
@@ -57,7 +59,7 @@ export default function LeaderboardPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wider text-gray-500">
-              <th className="py-2">#</th><th>Player</th><th>City</th><th className="text-right">Rating</th><th className="text-right">W/L/D</th>
+              <th className="py-2">#</th><th>{t('leaderboard.player')}</th><th>{t('leaderboard.city')}</th><th className="text-right">{t('leaderboard.rating')}</th><th className="text-right">{t('leaderboard.wld')}</th>
             </tr>
           </thead>
           <tbody>
@@ -72,7 +74,7 @@ export default function LeaderboardPage() {
             ))}
           </tbody>
         </table>
-        {list.length === 0 && <p className="text-center py-6 text-gray-500">No entries yet.</p>}
+        {list.length === 0 && <p className="text-center py-6 text-gray-500">{t('leaderboard.empty')}</p>}
       </div>
     </div>
   );

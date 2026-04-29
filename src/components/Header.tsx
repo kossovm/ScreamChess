@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { Crown, Sun, Moon, User } from 'lucide-react';
+import { Crown, Sun, Moon, User, Languages } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import { useLanguage } from './LanguageProvider';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function Header() {
   const { theme, toggle } = useTheme();
+  const { locale, setLocale, t } = useLanguage();
   const { user, signOut } = useAuth();
 
   return (
@@ -20,13 +22,25 @@ export default function Header() {
         </Link>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/play/ai" className="hidden sm:block px-3 py-2 hover:text-accent-500 transition">Play</Link>
-          <Link href="/analyze" className="hidden sm:block px-3 py-2 hover:text-accent-500 transition">Analyze</Link>
-          <Link href="/leaderboard" className="hidden sm:block px-3 py-2 hover:text-accent-500 transition">Leaderboard</Link>
+          <Link href="/play/ai" className="hidden sm:block px-3 py-2 hover:text-accent-500 transition">{t('header.play')}</Link>
+          <Link href="/analyze" className="hidden sm:block px-3 py-2 hover:text-accent-500 transition">{t('header.analyze')}</Link>
+          <Link href="/leaderboard" className="hidden sm:block px-3 py-2 hover:text-accent-500 transition">{t('header.leaderboard')}</Link>
+
+          <div className="relative">
+            <button
+              onClick={() => setLocale(locale === 'en' ? 'ru' : 'en')}
+              aria-label={t('header.language')}
+              title={t('header.language')}
+              className="p-2 rounded-xl glass hover:bg-white/80 dark:hover:bg-dark-700/80 flex items-center gap-1 text-xs font-semibold uppercase"
+            >
+              <Languages className="w-4 h-4" />
+              <span>{locale}</span>
+            </button>
+          </div>
 
           <button
             onClick={toggle}
-            aria-label="Toggle theme"
+            aria-label={t('header.toggleTheme')}
             className="p-2 rounded-xl glass hover:bg-white/80 dark:hover:bg-dark-700/80"
           >
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -38,10 +52,10 @@ export default function Header() {
                 <User className="w-4 h-4" />
                 <span className="hidden sm:inline">{user.email?.split('@')[0]}</span>
               </Link>
-              <button onClick={signOut} className="text-sm text-gray-500 hover:text-red-500">Logout</button>
+              <button onClick={signOut} className="text-sm text-gray-500 hover:text-red-500">{t('header.logout')}</button>
             </div>
           ) : (
-            <Link href="/login" className="btn-primary">Sign in</Link>
+            <Link href="/login" className="btn-primary">{t('header.signin')}</Link>
           )}
         </div>
       </nav>

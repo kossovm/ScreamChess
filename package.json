@@ -6,21 +6,25 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "setup:vosk": "node scripts/download-vosk-models.mjs",
+    "setup:vosk:en": "node scripts/download-vosk-models.mjs en",
+    "setup:vosk:ru": "node scripts/download-vosk-models.mjs ru"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.10.0",
-    "@supabase/supabase-js": "^2.45.0",
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.105.1",
     "chess.js": "^1.0.0-beta.8",
     "framer-motion": "^11.5.4",
     "lucide-react": "^0.439.0",
     "next": "14.2.10",
-    "openai": "^4.60.0",
     "react": "^18.3.1",
     "react-chessboard": "^4.7.2",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.4.1",
     "uuid": "^10.0.0",
+    "vosk-browser": "^0.0.8",
     "zustand": "^4.5.5"
   },
   "devDependencies": {
@@ -28,11 +32,13 @@
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^10.0.0",
+    "adm-zip": "^0.5.17",
     "autoprefixer": "^10.4.20",
     "eslint": "^8",
     "eslint-config-next": "14.2.10",
     "postcss": "^8.4.45",
     "tailwindcss": "^3.4.10",
+    "tar": "^7.5.13",
     "typescript": "^5"
   }
 }

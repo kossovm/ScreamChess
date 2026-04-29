@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { useT } from '@/components/LanguageProvider';
 import { Crown, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function LoginPage() {
   const router = useRouter();
+  const t = useT();
   const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [email, setEmail] = useState('');
@@ -17,7 +19,7 @@ export default function LoginPage() {
 
   const submit = async () => {
     if (!isSupabaseConfigured) {
-      toast.error('Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.');
+      toast.error(t('login.notConfigured'));
       return;
     }
     setLoading(true);
@@ -25,10 +27,10 @@ export default function LoginPage() {
       const fn = mode === 'in' ? signInWithEmail : signUpWithEmail;
       const { error } = await fn(email, pw);
       if (error) throw error;
-      toast.success(mode === 'in' ? 'Welcome back!' : 'Check your email to confirm.');
+      toast.success(mode === 'in' ? t('login.welcomeToast') : t('login.confirmEmail'));
       router.push('/');
     } catch (e: any) {
-      toast.error(e?.message ?? 'Auth error');
+      toast.error(e?.message ?? t('login.authError'));
     } finally {
       setLoading(false);
     }
@@ -42,23 +44,23 @@ export default function LoginPage() {
             <Crown className="w-7 h-7 text-white" />
           </div>
         </div>
-        <h1 className="text-2xl font-display font-bold text-center mb-1">{mode === 'in' ? 'Welcome back' : 'Create your profile'}</h1>
-        <p className="text-sm text-gray-500 text-center mb-6">Save your psycho-profile and game history.</p>
+        <h1 className="text-2xl font-display font-bold text-center mb-1">{mode === 'in' ? t('login.welcomeBack') : t('login.create')}</h1>
+        <p className="text-sm text-gray-500 text-center mb-6">{t('login.subtitle')}</p>
 
         <div className="space-y-3">
-          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email" className="input" />
-          <input value={pw} onChange={(e) => setPw(e.target.value)} type="password" placeholder="password" className="input" />
+          <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('login.email')} className="input" />
+          <input value={pw} onChange={(e) => setPw(e.target.value)} type="password" placeholder={t('login.password')} className="input" />
           <button onClick={submit} disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-            {mode === 'in' ? 'Sign in' : 'Sign up'}
+            {mode === 'in' ? t('login.signin') : t('login.signup')}
           </button>
-          <button onClick={signInWithGoogle} className="btn-ghost w-full">Continue with Google</button>
+          <button onClick={signInWithGoogle} className="btn-ghost w-full">{t('login.google')}</button>
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">
-          {mode === 'in' ? "No account?" : 'Have an account?'}{' '}
+          {mode === 'in' ? t('login.noAccount') : t('login.haveAccount')}{' '}
           <button onClick={() => setMode(mode === 'in' ? 'up' : 'in')} className="text-accent-500 hover:underline">
-            {mode === 'in' ? 'Sign up' : 'Sign in'}
+            {mode === 'in' ? t('login.signup') : t('login.signin')}
           </button>
         </p>
       </div>

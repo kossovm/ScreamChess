@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { useT } from '@/components/LanguageProvider';
 import { User, Trophy, Brain } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ProfilePage() {
   const { user, loading } = useAuth();
+  const t = useT();
   const [games, setGames] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
 
@@ -21,12 +23,12 @@ export default function ProfilePage() {
     })();
   }, [user]);
 
-  if (loading) return <div className="container mx-auto px-4 py-12 max-w-3xl">Loading…</div>;
+  if (loading) return <div className="container mx-auto px-4 py-12 max-w-3xl">{t('profile.loading')}</div>;
   if (!user) {
     return (
       <div className="container mx-auto px-4 py-12 max-w-3xl text-center">
-        <p className="mb-4">You need to be signed in.</p>
-        <Link href="/login" className="btn-primary">Sign in</Link>
+        <p className="mb-4">{t('profile.signedOut')}</p>
+        <Link href="/login" className="btn-primary">{t('header.signin')}</Link>
       </div>
     );
   }
@@ -39,25 +41,25 @@ export default function ProfilePage() {
         </div>
         <div>
           <h1 className="text-2xl font-display font-bold">{user.email}</h1>
-          <p className="text-sm text-gray-500">Member since {new Date(user.created_at!).toLocaleDateString()}</p>
+          <p className="text-sm text-gray-500">{t('profile.memberSince')} {new Date(user.created_at!).toLocaleDateString()}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         <div className="card">
-          <h3 className="font-semibold mb-2 flex items-center gap-2"><Trophy className="w-4 h-4 text-amber-500" /> Games played</h3>
+          <h3 className="font-semibold mb-2 flex items-center gap-2"><Trophy className="w-4 h-4 text-amber-500" /> {t('profile.gamesPlayed')}</h3>
           <p className="text-3xl font-display font-bold">{games.length}</p>
         </div>
         <div className="card">
-          <h3 className="font-semibold mb-2 flex items-center gap-2"><Brain className="w-4 h-4 text-accent-500" /> Cognitive style</h3>
-          <p className="text-xl font-display font-bold">{profile?.cognitive_style ?? 'Adaptive Hybrid'}</p>
+          <h3 className="font-semibold mb-2 flex items-center gap-2"><Brain className="w-4 h-4 text-accent-500" /> {t('profile.cognitiveStyle')}</h3>
+          <p className="text-xl font-display font-bold">{profile?.cognitive_style ?? t('psycho.style.adaptive')}</p>
         </div>
       </div>
 
       <div className="card">
-        <h3 className="font-semibold mb-3">Recent games</h3>
+        <h3 className="font-semibold mb-3">{t('profile.recentGames')}</h3>
         {games.length === 0 ? (
-          <p className="text-sm text-gray-500">No games yet — go play one.</p>
+          <p className="text-sm text-gray-500">{t('profile.noGames')}</p>
         ) : (
           <ul className="text-sm space-y-2">
             {games.map((g) => (

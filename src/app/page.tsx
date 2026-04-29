@@ -3,21 +3,24 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Brain, Mic, Swords, Bot, Trophy, Users, Sparkles } from 'lucide-react';
-
-const features = [
-  { icon: Mic, title: 'Vocal Warfare', desc: 'Move pieces by speaking. Trash-talk your opponent live.', color: 'from-pink-500 to-rose-500' },
-  { icon: Brain, title: 'Psycho-AI Profiling', desc: 'AI reads your move patterns AND your voice tone.', color: 'from-violet-500 to-purple-500' },
-  { icon: Bot, title: 'Stockfish Coach', desc: 'World-class engine breaks down every move.', color: 'from-blue-500 to-cyan-500' },
-  { icon: Trophy, title: 'Geo Leaderboards', desc: 'Top strategists from your city.', color: 'from-amber-500 to-orange-500' },
-];
-
-const modes = [
-  { href: '/play/local', title: 'Local Duel', desc: 'Play face-to-face on one device.', icon: Users, accent: 'from-primary-500 to-cyan-500' },
-  { href: '/play/ai', title: 'vs Stockfish', desc: 'Challenge the engine. 10 difficulty levels.', icon: Bot, accent: 'from-accent-500 to-pink-500' },
-  { href: '/play/online', title: 'Online (Voice)', desc: 'Live voice chat. Mind games included.', icon: Swords, accent: 'from-amber-500 to-red-500' },
-];
+import { useT } from '@/components/LanguageProvider';
 
 export default function HomePage() {
+  const t = useT();
+
+  const features = [
+    { icon: Mic, title: t('home.features.vocal.title'), desc: t('home.features.vocal.desc'), color: 'from-pink-500 to-rose-500' },
+    { icon: Brain, title: t('home.features.psycho.title'), desc: t('home.features.psycho.desc'), color: 'from-violet-500 to-purple-500' },
+    { icon: Bot, title: t('home.features.coach.title'), desc: t('home.features.coach.desc'), color: 'from-blue-500 to-cyan-500' },
+    { icon: Trophy, title: t('home.features.geo.title'), desc: t('home.features.geo.desc'), color: 'from-amber-500 to-orange-500' },
+  ];
+
+  const modes = [
+    { href: '/play/local', title: t('home.modes.local.title'), desc: t('home.modes.local.desc'), icon: Users, accent: 'from-primary-500 to-cyan-500' },
+    { href: '/play/ai', title: t('home.modes.ai.title'), desc: t('home.modes.ai.desc'), icon: Bot, accent: 'from-accent-500 to-pink-500' },
+    { href: '/play/online', title: t('home.modes.online.title'), desc: t('home.modes.online.desc'), icon: Swords, accent: 'from-amber-500 to-red-500' },
+  ];
+
   return (
     <div className="container mx-auto px-4 pt-10 pb-20 max-w-6xl">
       <motion.section
@@ -28,21 +31,20 @@ export default function HomePage() {
       >
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass text-sm mb-6">
           <Sparkles className="w-4 h-4 text-accent-500" />
-          <span>Game · Mind · Voice</span>
+          <span>{t('home.badge')}</span>
         </div>
         <h1 className="text-5xl md:text-7xl font-display font-bold tracking-tight mb-6 leading-[1.1]">
-          Chess that reads <br />
+          {t('home.title.line1')} <br />
           <span className="bg-gradient-to-r from-primary-500 via-accent-500 to-pink-500 bg-clip-text text-transparent">
-            your mind.
+            {t('home.title.line2')}
           </span>
         </h1>
         <p className="text-lg md:text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto mb-10">
-          PsychoVoice Chess analyzes not just your moves on the board — but your voice, your hesitations, your style.
-          A psychological passport for every game you play.
+          {t('home.subtitle')}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
-          <Link href="/play/ai" className="btn-primary text-lg px-8 py-3.5">Start Playing</Link>
-          <Link href="/leaderboard" className="btn-ghost text-lg px-8 py-3.5">Leaderboard</Link>
+          <Link href="/play/ai" className="btn-primary text-lg px-8 py-3.5">{t('home.cta.start')}</Link>
+          <Link href="/leaderboard" className="btn-ghost text-lg px-8 py-3.5">{t('home.cta.leaderboard')}</Link>
         </div>
       </motion.section>
 
@@ -68,7 +70,7 @@ export default function HomePage() {
 
       <section className="mb-20">
         <h2 className="text-3xl md:text-4xl font-display font-bold mb-10 text-center">
-          What makes us <span className="text-accent-500">different</span>
+          {t('home.features.title')} <span className="text-accent-500">{t('home.features.titleAccent')}</span>
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {features.map((f, i) => (
@@ -93,12 +95,11 @@ export default function HomePage() {
       </section>
 
       <section className="card text-center">
-        <h2 className="text-2xl md:text-3xl font-display font-bold mb-3">For HR & Recruiters</h2>
+        <h2 className="text-2xl md:text-3xl font-display font-bold mb-3">{t('home.b2b.title')}</h2>
         <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-5">
-          A 5-minute match with PsychoVoice gives a primary risk-profile, adaptability and stress-tolerance reading
-          for any candidate. B2B API access available.
+          {t('home.b2b.desc')}
         </p>
-        <a href="mailto:hr@psychovoice.chess" className="btn-ghost inline-block">Contact Sales</a>
+        <a href="mailto:hr@psychovoice.chess" className="btn-ghost inline-block">{t('home.b2b.cta')}</a>
       </section>
     </div>
   );
