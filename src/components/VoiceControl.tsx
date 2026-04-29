@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Cloud, HardDrive, Loader2, Mic, MicOff, Volume2 } from 'lucide-react';
-import { useVoiceCommand, type VoiceErrorCode } from '@/hooks/useVoiceCommand';
+import { Loader2, Mic, MicOff, Volume2 } from 'lucide-react';
 import { useVoskRecognition } from '@/hooks/useVoskRecognition';
+import type { VoiceErrorCode } from '@/hooks/useVoiceCommand';
 import { parseVoiceCommand } from '@/lib/voiceParser';
 import { inferEmotionFromVoice } from '@/lib/psychoAnalyzer';
 import { useGameStore } from '@/store/gameStore';
@@ -15,11 +15,9 @@ interface Props {
   lang?: string;
   disabled?: boolean;
   onMove?: (move: { from: string; to: string }) => void;
-  onUndo?: () => number; // returns number of plies actually undone
+  onUndo?: () => number;
   hotkey?: string;
 }
-
-type Engine = 'cloud' | 'local';
 
 const ERROR_KEY: Record<VoiceErrorCode, TranslationKey> = {
   'not-allowed': 'voice.error.not-allowed',
@@ -39,42 +37,22 @@ export default function VoiceControl({ lang, disabled, onMove, onUndo, hotkey = 
   const { locale, t } = useLanguage();
   const effectiveLang = lang ?? (locale === 'ru' ? 'ru-RU' : 'en-US');
 
-  // Initial value must be deterministic across server/client to avoid hydration mismatch;
-  // localStorage is read in the effect below.
-  const [engine, setEngine] = useState<Engine>('cloud');
-  useEffect(() => {
-    const stored = localStorage.getItem('voice-engine') as Engine | null;
-    if (stored === 'cloud' || stored === 'local') setEngine(stored);
-  }, []);
-
-  // Both hooks always mounted; we just route start/stop to the active one.
-  const cloud = useVoiceCommand({ lang: effectiveLang });
-  const local = useVoskRecognition({ lang: effectiveLang });
-
-  const active = engine === 'cloud' ? cloud : local;
+  const { supported, listening, transcript, confidence, error, modelStatus, start, stop } =
+    useVoskRecognition({ lang: effectiveLang });
   const { chess, makeMove, isGameOver, undo: storeUndo } = useGameStore();
   const [history, setHistory] = useState<string[]>([]);
 
-  const setEngineAndPersist = (e: Engine) => {
-    setEngine(e);
-    if (typeof window !== 'undefined') localStorage.setItem('voice-engine', e);
-    // stop the inactive engine if it was running
-    cloud.stop();
-    local.stop();
-  };
-
-  // Surface errors via toast, only from the active engine
   useEffect(() => {
-    if (!active.error) return;
-    const key = ERROR_KEY[active.error] ?? 'voice.error.unknown';
-    if (active.error === 'no-speech' || active.error === 'aborted') toast(t(key));
+    if (!error) return;
+    const key = ERROR_KEY[error] ?? 'voice.error.unknown';
+    if (error === 'no-speech' || error === 'aborted') toast(t(key));
     else toast.error(t(key));
-  }, [active.error, t]);
+  }, [error, t]);
 
-  const handleResult = (transcript: string, durationMs: number, voiceConf: number) => {
-    const parsed = parseVoiceCommand(transcript, chess);
-    const emotion = inferEmotionFromVoice({ transcript, durationMs, confidence: voiceConf });
-    setHistory((h) => [transcript, ...h].slice(0, 5));
+  const handleResult = (transcriptText: string, durationMs: number, voiceConf: number) => {
+    const parsed = parseVoiceCommand(transcriptText, chess);
+    const emotion = inferEmotionFromVoice({ transcript: transcriptText, durationMs, confidence: voiceConf });
+    setHistory((h) => [transcriptText, ...h].slice(0, 5));
 
     if (parsed.type === 'move' && parsed.from && parsed.to) {
       const ok = makeMove({ from: parsed.from, to: parsed.to, promotion: 'q' }, emotion, voiceConf);
@@ -99,47 +77,34 @@ export default function VoiceControl({ lang, disabled, onMove, onUndo, hotkey = 
       if (popped > 0) toast.success(`↩️ ${t('voice.undone')}`);
       else toast(t('voice.nothingToUndo'));
     } else {
-      toast.error(`${t('voice.cantParse')} "${transcript}"`);
+      toast.error(`${t('voice.cantParse')} "${transcriptText}"`);
     }
   };
 
   const handleStart = () => {
-    console.log('[VoiceControl] handleStart() · engine=', engine, 'disabled=', disabled, 'gameOver=', isGameOver, 'listening=', active.listening);
-    if (disabled || isGameOver || active.listening) return;
-    active.start((res) => handleResult(res.transcript, res.durationMs, res.confidence));
+    if (disabled || isGameOver || listening) return;
+    start((res) => handleResult(res.transcript, res.durationMs, res.confidence));
   };
 
-  // Global hotkey
+  // Global hotkey (V by default)
   useEffect(() => {
-    if (!active.supported) {
-      console.log('[VoiceControl] hotkey not bound · active.supported=false');
-      return;
-    }
-    console.log('[VoiceControl] hotkey listener mounted, key=', hotkey, 'engine=', engine);
+    if (!supported) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() !== hotkey.toLowerCase()) return;
       const target = e.target as HTMLElement | null;
       const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
-        console.log('[VoiceControl] V ignored, target is input/textarea');
-        return;
-      }
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
-      console.log('[VoiceControl] V pressed · listening=', active.listening);
       e.preventDefault();
-      if (active.listening) active.stop();
+      if (listening) stop();
       else handleStart();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active.supported, active.listening, hotkey, isGameOver, disabled, chess, engine]);
+  }, [supported, listening, hotkey, isGameOver, disabled, chess]);
 
-  // Don't add a global stop() cleanup here — both hooks already clean up on
-  // actual unmount, and `cloud`/`local` references change on every render,
-  // which would tear down the audio pipeline mid-recognition.
-
-  if (engine === 'cloud' && !cloud.supported) {
+  if (!supported) {
     return (
       <div className="card text-sm">
         <div className="flex items-center gap-2 text-amber-500"><MicOff className="w-4 h-4" /> {t('voice.notSupported')}</div>
@@ -148,75 +113,50 @@ export default function VoiceControl({ lang, disabled, onMove, onUndo, hotkey = 
     );
   }
 
-  const localLoading = engine === 'local' && local.modelStatus === 'loading';
-  const localError = engine === 'local' && local.modelStatus === 'error';
+  const modelLoading = modelStatus === 'loading';
+  const modelMissing = modelStatus === 'missing';
+  const modelError = modelStatus === 'error';
 
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold flex items-center gap-2"><Volume2 className="w-4 h-4" /> {t('voice.title')}</h3>
-        <span className={`text-xs px-2 py-0.5 rounded-full ${active.listening ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}`}>
-          {active.listening ? t('voice.listening') : t('voice.idle')}
+        <span className={`text-xs px-2 py-0.5 rounded-full ${listening ? 'bg-red-500/20 text-red-400' : 'bg-gray-500/20 text-gray-400'}`}>
+          {listening ? t('voice.listening') : t('voice.idle')}
         </span>
       </div>
 
-      {/* Engine toggle */}
-      <div className="mb-3">
-        <div className="text-xs text-gray-500 mb-1.5">{t('voice.engine.title')}</div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setEngineAndPersist('cloud')}
-            className={`text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
-              engine === 'cloud' ? 'bg-primary-500 text-white' : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10'
-            }`}
-          >
-            <Cloud className="w-3.5 h-3.5" /> {t('voice.engine.cloud')}
-          </button>
-          <button
-            onClick={() => setEngineAndPersist('local')}
-            className={`text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
-              engine === 'local' ? 'bg-primary-500 text-white' : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10'
-            }`}
-          >
-            <HardDrive className="w-3.5 h-3.5" /> {t('voice.engine.local')}
-          </button>
-        </div>
-        <p className="text-[11px] text-gray-500 mt-1.5">
-          {engine === 'cloud' ? t('voice.engine.cloudHint') : t('voice.engine.localHint')}
-        </p>
-      </div>
-
       <button
-        onClick={active.listening ? active.stop : handleStart}
-        disabled={disabled || localLoading}
-        className={`w-full btn ${active.listening ? 'bg-red-500/90 text-white' : 'btn-primary'} flex items-center justify-center gap-2 disabled:opacity-60`}
+        onClick={listening ? stop : handleStart}
+        disabled={disabled || modelLoading || modelMissing}
+        className={`w-full btn ${listening ? 'bg-red-500/90 text-white' : 'btn-primary'} flex items-center justify-center gap-2 disabled:opacity-60`}
       >
-        {localLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : active.listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-        {localLoading ? t('voice.model.loading') : active.listening ? t('voice.stop') : t('voice.speak')}
+        {modelLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+        {modelLoading ? t('voice.model.loading') : listening ? t('voice.stop') : t('voice.speak')}
         <kbd className="ml-2 px-1.5 py-0.5 rounded bg-black/20 text-[10px] font-mono uppercase">{hotkey}</kbd>
       </button>
 
-      {engine === 'local' && local.modelStatus === 'missing' && (
+      {modelMissing && (
         <div className="mt-2 px-3 py-2 rounded-lg bg-amber-500/10 text-xs text-amber-500">
           {t('voice.model.missing')}
         </div>
       )}
-      {localError && (
+      {modelError && (
         <div className="mt-2 text-xs text-red-400">{t('voice.model.error')}</div>
       )}
-      {engine === 'local' && local.modelStatus === 'ready' && !local.listening && (
+      {modelStatus === 'ready' && !listening && (
         <div className="mt-2 text-[11px] text-emerald-500">✓ {t('voice.model.ready')}</div>
       )}
 
-      {active.transcript && (
+      {transcript && (
         <div className="mt-3 px-3 py-2 rounded-lg bg-black/5 dark:bg-white/5 text-sm">
-          <span className="opacity-60 text-xs">{t('voice.youSaid')}</span> {active.transcript}
-          {active.confidence > 0 && <span className="ml-2 text-xs opacity-60">({Math.round(active.confidence * 100)}%)</span>}
+          <span className="opacity-60 text-xs">{t('voice.youSaid')}</span> {transcript}
+          {confidence > 0 && <span className="ml-2 text-xs opacity-60">({Math.round(confidence * 100)}%)</span>}
         </div>
       )}
 
       <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-        {t('voice.tryHint')} <span className="font-mono">&quot;e2 e4&quot;</span>, <span className="font-mono">&quot;knight to f3&quot;</span>, <span className="font-mono">&quot;short castle&quot;</span>
+        {t('voice.tryHint')} <span className="font-mono">&quot;e2 e4&quot;</span>, <span className="font-mono">&quot;конь эф три&quot;</span>, <span className="font-mono">&quot;короткая рокировка&quot;</span>
       </div>
 
       {history.length > 0 && (
