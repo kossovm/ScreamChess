@@ -44,6 +44,12 @@ export default function HomePage() {
         </p>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <Link href="/play/ai" className="btn-primary text-lg px-8 py-3.5">{t('home.cta.start')}</Link>
+          <Link
+            href="/play/online"
+            className="text-lg px-8 py-3.5 rounded-xl font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:scale-[1.02] transition-transform shadow-lg shadow-orange-500/20"
+          >
+            {t('home.cta.online')}
+          </Link>
           <Link href="/leaderboard" className="btn-ghost text-lg px-8 py-3.5">{t('home.cta.leaderboard')}</Link>
         </div>
       </motion.section>

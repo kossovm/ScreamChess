@@ -14,7 +14,9 @@ import InterviewPanel from '@/components/InterviewPanel';
 import { useGameStore } from '@/store/gameStore';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useT } from '@/components/LanguageProvider';
-import { Briefcase, CheckCircle2, Circle, Copy, Eye, Users } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useUserEconomy } from '@/hooks/useUserEconomy';
+import { Briefcase, CheckCircle2, Circle, Coins, Copy, Eye, Flag, Star, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type Role = 'w' | 'b' | 'spectator';
@@ -30,8 +32,31 @@ const TIME_OPTIONS_SEC = [60, 180, 300, 600, 1800, 0]; // 1m, 3m, 5m, 10m, 30m, 
 export default function OnlineRoom() {
   const { room } = useParams<{ room: string }>();
   const searchParams = useSearchParams();
-  const { reset, makeMove, fen, history, undo, chess, isGameOver, turnStartedAt } = useGameStore();
+  const { reset, makeMove, fen, history, undo, chess, isGameOver, turnStartedAt, result } = useGameStore();
   const t = useT();
+  const { user } = useAuth();
+  const { economy, applyMatchResult } = useUserEconomy();
+
+  const isRated = useMemo(() => {
+    if (searchParams.get('rated') === '1') return true;
+    if (typeof window !== 'undefined' && localStorage.getItem(`pvc-mode-${room}`) === 'rated') return true;
+    return false;
+  }, [room, searchParams]);
+
+  const stake = useMemo(() => {
+    const fromUrl = searchParams.get('stake');
+    if (fromUrl) return parseInt(fromUrl, 10) || 0;
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`pvc-stake-${room}`);
+      if (stored) return parseInt(stored, 10) || 0;
+    }
+    return 0;
+  }, [room, searchParams]);
+
+  const [opponentUserId, setOpponentUserId] = useState<string | null>(null);
+  const [resignedSide, setResignedSide] = useState<'w' | 'b' | null>(null);
+  const [ratingApplied, setRatingApplied] = useState(false);
+  const [ratingChange, setRatingChange] = useState<{ rating: number; coin: number } | null>(null);
 
   const isInterview = useMemo(() => {
     if (searchParams.get('mode') === 'interview') return true;
@@ -103,7 +128,29 @@ export default function OnlineRoom() {
     setStartedAt(null);
     setIAmReady(false);
     setTimeoutLoser(null);
+    setResignedSide(null);
+    setRatingApplied(false);
+    setRatingChange(null);
   }, [room, reset]);
+
+  // Re-broadcast identity once user becomes known (login flow).
+  useEffect(() => {
+    if (user?.id && channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'identify',
+        payload: { userId: user.id, presenceKey },
+      });
+    }
+  }, [user?.id, presenceKey]);
+
+  // Pull opponent id from localStorage hint (set by lobby) if we don't have it from broadcast yet.
+  useEffect(() => {
+    if (opponentUserId) return;
+    if (typeof window === 'undefined') return;
+    const hint = localStorage.getItem(`pvc-opp-${room}`);
+    if (hint) setOpponentUserId(hint);
+  }, [opponentUserId, room]);
 
   // Subscribe to channel
   useEffect(() => {
@@ -141,17 +188,40 @@ export default function OnlineRoom() {
           setTimeoutLoser(payload.loser);
         }
       })
+      .on('broadcast', { event: 'identify' }, ({ payload }: any) => {
+        if (payload?.userId && payload?.presenceKey && payload.presenceKey !== presenceKey) {
+          setOpponentUserId(payload.userId);
+        }
+      })
+      .on('broadcast', { event: 'resign' }, ({ payload }: any) => {
+        if (payload?.side === 'w' || payload?.side === 'b') setResignedSide(payload.side);
+      })
+      .on('broadcast', { event: 'time-control' }, ({ payload }: any) => {
+        if (typeof payload?.seconds === 'number') setTimeControlSec(payload.seconds);
+      })
       .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState() as Record<string, Array<{ joinedAt: number; ready: boolean }>>;
-        const list: PresenceRow[] = Object.entries(state).flatMap(([key, vs]) =>
-          vs.map((v) => ({ key, joinedAt: v.joinedAt ?? 0, ready: !!v.ready }))
-        );
+        const state = channel.presenceState() as Record<string, Array<{ joinedAt?: number; ready?: boolean }>>;
+        // One key can have multiple presence entries (StrictMode, reconnects).
+        // Collapse to one row per key: earliest joinedAt, OR-of all ready flags.
+        const list: PresenceRow[] = Object.entries(state).map(([key, vs]) => {
+          let earliest = Infinity;
+          let anyReady = false;
+          for (const v of vs) {
+            if (typeof v?.joinedAt === 'number' && v.joinedAt < earliest) earliest = v.joinedAt;
+            if (v?.ready) anyReady = true;
+          }
+          return { key, joinedAt: Number.isFinite(earliest) ? earliest : 0, ready: anyReady };
+        });
         list.sort((a, b) => a.joinedAt - b.joinedAt || a.key.localeCompare(b.key));
         setMembers(list);
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           await channel.track({ joinedAt, ready: false });
+          // Tell the other side who I am (auth user id) so rated games can credit/debit the right account.
+          if (user?.id) {
+            channel.send({ type: 'broadcast', event: 'identify', payload: { userId: user.id, presenceKey } });
+          }
         }
       });
 
@@ -169,12 +239,13 @@ export default function OnlineRoom() {
     ch.track({ joinedAt, ready: iAmReady });
   }, [iAmReady, joinedAt]);
 
-  // Auto-start when both players ready (both clients agree by checking presence)
+  // Auto-start when both players ready. The WHITE player (= first joiner)
+  // is the deterministic broadcaster, regardless of the localStorage host flag —
+  // that way joining via a shared link still works.
   useEffect(() => {
-    if (!isHost) return;
     if (gameStarted) return;
+    if (role !== 'w') return;
     if (!whitePlayer?.ready || !blackPlayer?.ready) return;
-    // Host broadcasts the start signal so both clients reset together.
     const startAt = Date.now();
     channelRef.current?.send({
       type: 'broadcast',
@@ -187,7 +258,7 @@ export default function OnlineRoom() {
     setTimeoutLoser(null);
     toast.success(t('online.bothReady'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [whitePlayer?.ready, blackPlayer?.ready, isHost, gameStarted, timeControlSec]);
+  }, [whitePlayer?.ready, blackPlayer?.ready, role, gameStarted, timeControlSec]);
 
   // Auto-enable voice chat when interview mode and opponent joined
   useEffect(() => {
@@ -243,6 +314,13 @@ export default function OnlineRoom() {
     channelRef.current?.send({ type: 'broadcast', event: 'move', payload: m });
   };
 
+  const handleResign = () => {
+    if (!isPlayer || resignedSide || isGameOver || timeoutLoser) return;
+    if (!confirm(t('online.confirmResign'))) return;
+    setResignedSide(role as 'w' | 'b');
+    channelRef.current?.send({ type: 'broadcast', event: 'resign', payload: { side: role } });
+  };
+
   const broadcastUndo = (count: number) => {
     channelRef.current?.send({ type: 'broadcast', event: 'undo', payload: { count } });
   };
@@ -254,7 +332,50 @@ export default function OnlineRoom() {
 
   // Effective game state for UI:
   const isFlagFall = !!timeoutLoser;
-  const movesDisabled = !gameStarted || !isPlayer || isFlagFall;
+  const isResigned = !!resignedSide;
+  const gameEnded = isGameOver || isFlagFall || isResigned;
+  const movesDisabled = !gameStarted || !isPlayer || gameEnded;
+
+  // Determine outcome from caller's perspective (caller = WHITE in rated games).
+  const computeMyResult = (): 'win' | 'loss' | 'draw' | 'resign' | null => {
+    if (!gameEnded) return null;
+    if (isResigned) {
+      if (resignedSide === role) return 'resign';
+      return 'win';
+    }
+    if (isFlagFall) {
+      if (timeoutLoser === role) return 'loss';
+      return 'win';
+    }
+    if (isGameOver) {
+      if (chess.isCheckmate()) {
+        // chess.turn() is the side that just got mated
+        if (chess.turn() === role) return 'loss';
+        return 'win';
+      }
+      return 'draw';
+    }
+    return null;
+  };
+
+  // Apply rating once per game, only by WHITE (deterministic single caller).
+  useEffect(() => {
+    if (!isRated || ratingApplied || role !== 'w' || !user || !opponentUserId) return;
+    const myResult = computeMyResult();
+    if (!myResult) return;
+    setRatingApplied(true);
+    applyMatchResult({
+      roomId: room as string,
+      opponentId: opponentUserId,
+      result: myResult,
+      stake,
+    }).then((res) => {
+      if (res.ok) {
+        setRatingChange({ rating: res.ratingDelta ?? 0, coin: res.coinDelta ?? 0 });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRated, ratingApplied, role, user, opponentUserId, isGameOver, isFlagFall, isResigned, timeoutLoser, resignedSide]);
 
   const whiteName = whitePlayer ? (whitePlayer.key === presenceKey ? t('play.you') : t('play.opponent')) : '—';
   const blackName = blackPlayer ? (blackPlayer.key === presenceKey ? t('play.you') : t('play.opponent')) : '—';
@@ -266,13 +387,18 @@ export default function OnlineRoom() {
           {isInterview ? <Briefcase className="w-6 h-6 text-amber-500" /> : <Users className="w-6 h-6 text-accent-500" />}
           {t('online.room')} <span className="font-mono text-accent-500">{room}</span>
         </h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={copyLink} className="btn-ghost flex items-center gap-2">
             <Copy className="w-4 h-4" /> {t('online.copy')}
           </button>
           <button onClick={() => setVoiceEnabled((v) => !v)} className={voiceEnabled ? 'btn-primary' : 'btn-ghost'}>
             {voiceEnabled ? t('online.voiceOn') : t('online.enableVoice')}
           </button>
+          {gameStarted && isPlayer && !gameEnded && (
+            <button onClick={handleResign} className="btn-ghost text-rose-500 flex items-center gap-2">
+              <Flag className="w-4 h-4" /> {t('online.resign')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -284,6 +410,47 @@ export default function OnlineRoom() {
           <p className="text-xs text-gray-600 dark:text-gray-300">
             {isHost ? t('interview.banner.host') : t('interview.banner.candidate')}
           </p>
+        </div>
+      )}
+
+      {isRated && (
+        <div className="card mb-4 border border-amber-500/40 bg-gradient-to-r from-amber-500/5 to-orange-500/5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Star className="w-5 h-5 text-amber-500" />
+            <div>
+              <div className="font-semibold">{t('online.ratedBadge')}</div>
+              <div className="text-xs text-gray-500">
+                <span className="text-emerald-400">+2</span> {t('online.preview.win').toLowerCase()} ·
+                <span className="text-amber-400 ml-1">+1</span> {t('online.preview.draw').toLowerCase()} ·
+                <span className="text-rose-400 ml-1">−1</span> {t('online.preview.loss').toLowerCase()} ·
+                <span className="text-rose-500 ml-1">−2</span> {t('online.preview.resign').toLowerCase()}
+              </div>
+            </div>
+          </div>
+          {stake > 0 && (
+            <div className="flex items-center gap-1.5 text-sm font-mono">
+              <Coins className="w-4 h-4 text-yellow-500" /> {t('online.stake')}: {stake}
+            </div>
+          )}
+        </div>
+      )}
+
+      {ratingChange && (
+        <div className="card mb-4 border border-emerald-500/40 bg-emerald-500/5 flex items-center justify-between flex-wrap gap-2">
+          <div className="text-sm">
+            <span className="font-semibold">{t('online.ratingChanged')}: </span>
+            <span className={ratingChange.rating > 0 ? 'text-emerald-400' : ratingChange.rating < 0 ? 'text-rose-400' : ''}>
+              {ratingChange.rating > 0 ? '+' : ''}{ratingChange.rating}
+            </span>
+          </div>
+          {stake > 0 && (
+            <div className="text-sm">
+              <span className="font-semibold">{t('online.coinChange')}: </span>
+              <span className={ratingChange.coin > 0 ? 'text-emerald-400' : ratingChange.coin < 0 ? 'text-rose-400' : ''}>
+                {ratingChange.coin > 0 ? '+' : ''}{ratingChange.coin} 💰
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -309,12 +476,17 @@ export default function OnlineRoom() {
         <div className="card mb-4 grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-3 items-center">
           <div>
             <div className="text-xs text-gray-500 mb-1">{t('online.timeControl')}</div>
-            {isHost && !isInterview ? (
+            {role === 'w' && !isInterview ? (
               <select
                 value={timeControlSec}
                 onChange={(e) => {
                   const v = Number(e.target.value);
                   setTimeControlSec(v);
+                  channelRef.current?.send({
+                    type: 'broadcast',
+                    event: 'time-control',
+                    payload: { seconds: v },
+                  });
                 }}
                 className="input py-1.5 text-sm w-full md:w-auto"
                 disabled={iAmReady}
@@ -328,7 +500,7 @@ export default function OnlineRoom() {
             ) : (
               <div className="font-mono text-sm">
                 {timeControlSec === 0 ? t('online.timeControl.unlimited') : `${Math.floor(timeControlSec / 60)} min`}
-                {!isHost && <span className="text-xs text-gray-500 ml-2">({t('online.waitingHost')})</span>}
+                {role === 'b' && <span className="text-xs text-gray-500 ml-2">({t('online.waitingHost')})</span>}
               </div>
             )}
           </div>
@@ -355,6 +527,13 @@ export default function OnlineRoom() {
       {isFlagFall && (
         <div className="card mb-4 text-center text-lg font-semibold border border-red-500/40 bg-red-500/10">
           ⏱️ {t('online.flagged')} · {timeoutLoser === 'w' ? '0-1' : '1-0'}
+        </div>
+      )}
+
+      {isResigned && !isFlagFall && (
+        <div className="card mb-4 text-center text-lg font-semibold border border-rose-500/40 bg-rose-500/10">
+          🏳️ {resignedSide === role ? t('voice.resigned') : `${t('play.opponent')} 🏳️`} ·{' '}
+          {resignedSide === 'w' ? '0-1' : '1-0'}
         </div>
       )}
 
