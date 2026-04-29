@@ -37,59 +37,61 @@ export default function OnlineRoom() {
   const { user } = useAuth();
   const { economy, applyMatchResult } = useUserEconomy();
 
-  const isRated = useMemo(() => {
-    if (searchParams.get('rated') === '1') return true;
-    if (typeof window !== 'undefined' && localStorage.getItem(`pvc-mode-${room}`) === 'rated') return true;
-    return false;
-  }, [room, searchParams]);
+  // Server render and first client render must match. All localStorage-derived
+  // values start as neutral defaults, then real values land in a useEffect
+  // after mount. This prevents hydration mismatches (React error #423) which
+  // would otherwise cause the entire root to re-render and freeze interactions.
+  const [isRated, setIsRated] = useState(false);
+  const [stake, setStake] = useState(0);
+  const [isInterview, setIsInterview] = useState(false);
+  const [isHost, setIsHost] = useState(false);
+  const [presenceKey, setPresenceKey] = useState('');
+  const [joinedAt, setJoinedAt] = useState(0);
+  const [hydrated, setHydrated] = useState(false);
 
-  const stake = useMemo(() => {
-    const fromUrl = searchParams.get('stake');
-    if (fromUrl) return parseInt(fromUrl, 10) || 0;
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(`pvc-stake-${room}`);
-      if (stored) return parseInt(stored, 10) || 0;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setIsRated(searchParams.get('rated') === '1' || localStorage.getItem(`pvc-mode-${room}`) === 'rated');
+
+    const stakeUrl = searchParams.get('stake');
+    if (stakeUrl) setStake(parseInt(stakeUrl, 10) || 0);
+    else {
+      const stakeStored = localStorage.getItem(`pvc-stake-${room}`);
+      if (stakeStored) setStake(parseInt(stakeStored, 10) || 0);
     }
-    return 0;
+
+    setIsInterview(
+      searchParams.get('mode') === 'interview' || localStorage.getItem(`pvc-mode-${room}`) === 'interview'
+    );
+    setIsHost(localStorage.getItem(`pvc-host-${room}`) === '1');
+
+    const pkKey = `pvc-presence-${room}`;
+    let pk = localStorage.getItem(pkKey);
+    if (!pk) {
+      pk = (typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2));
+      localStorage.setItem(pkKey, pk);
+    }
+    setPresenceKey(pk);
+
+    const joKey = `pvc-joined-${room}`;
+    const joStored = localStorage.getItem(joKey);
+    if (joStored) {
+      setJoinedAt(parseInt(joStored, 10));
+    } else {
+      const t = Date.now();
+      localStorage.setItem(joKey, String(t));
+      setJoinedAt(t);
+    }
+
+    setHydrated(true);
   }, [room, searchParams]);
 
   const [opponentUserId, setOpponentUserId] = useState<string | null>(null);
   const [resignedSide, setResignedSide] = useState<'w' | 'b' | null>(null);
   const [ratingApplied, setRatingApplied] = useState(false);
   const [ratingChange, setRatingChange] = useState<{ rating: number; coin: number } | null>(null);
-
-  const isInterview = useMemo(() => {
-    if (searchParams.get('mode') === 'interview') return true;
-    if (typeof window !== 'undefined' && localStorage.getItem(`pvc-mode-${room}`) === 'interview') return true;
-    return false;
-  }, [room, searchParams]);
-
-  const isHost = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem(`pvc-host-${room}`) === '1';
-  }, [room]);
-
-  // Stable per-room presence key (survives reload).
-  const presenceKey = useMemo(() => {
-    if (typeof window === 'undefined') return '';
-    const k = `pvc-presence-${room}`;
-    let v = localStorage.getItem(k);
-    if (!v) {
-      v = (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-      localStorage.setItem(k, v);
-    }
-    return v;
-  }, [room]);
-
-  const joinedAt = useMemo(() => {
-    if (typeof window === 'undefined') return Date.now();
-    const k = `pvc-joined-${room}`;
-    const stored = localStorage.getItem(k);
-    if (stored) return parseInt(stored, 10);
-    const t = Date.now();
-    localStorage.setItem(k, String(t));
-    return t;
-  }, [room]);
 
   const [members, setMembers] = useState<PresenceRow[]>([]);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
@@ -212,6 +214,9 @@ export default function OnlineRoom() {
       toast(t('online.notConfigured'), { icon: '⚠️' });
       return;
     }
+    // Wait until our presenceKey/joinedAt are loaded from localStorage —
+    // subscribing with an empty presence key would dump us into "spectator".
+    if (!presenceKey || !joinedAt) return;
 
     const channel = supabase.channel(`room:${room}`, {
       config: { broadcast: { self: false }, presence: { key: presenceKey } },
