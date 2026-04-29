@@ -1,15 +1,19 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Chess } from 'chess.js';
 import { useGameStore } from '@/store/gameStore';
+import { useStockfish } from '@/hooks/useStockfish';
 import { useLanguage } from './LanguageProvider';
 import { buildPgn, pgnHeaders } from '@/lib/chessUtils';
-import { Briefcase, Clock, Loader2, Sparkles } from 'lucide-react';
+import { Briefcase, Clock, Lightbulb, Loader2, Sparkles } from 'lucide-react';
 
 interface Props {
   startedAt: number;
   budgetSec?: number;
   candidateLabel?: string;
+  /** The host's colour, so engine hints show up only on the host's turn. */
+  hostSide?: 'w' | 'b' | null;
 }
 
 const DEFAULT_BUDGET = 300; // 5 min
@@ -21,12 +25,53 @@ function formatMs(ms: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export default function InterviewPanel({ startedAt, budgetSec = DEFAULT_BUDGET, candidateLabel }: Props) {
-  const { history } = useGameStore();
+export default function InterviewPanel({ startedAt, budgetSec = DEFAULT_BUDGET, candidateLabel, hostSide }: Props) {
+  const { history, fen, chess } = useGameStore();
   const { locale, t } = useLanguage();
+  const { ready: engineReady, evaluate, stop: stopEngine } = useStockfish();
   const [now, setNow] = useState(() => Date.now());
   const [report, setReport] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hintsEnabled, setHintsEnabled] = useState(true);
+  const [hint, setHint] = useState<{ san: string; cp: number | null; mate: number | null } | null>(null);
+  const [hintLoading, setHintLoading] = useState(false);
+  const hintReqId = useRef(0);
+
+  // Compute engine hint whenever the position changes and it's the host's turn.
+  useEffect(() => {
+    if (!hintsEnabled || !engineReady || !hostSide) return;
+    if (chess.turn() !== hostSide) {
+      setHint(null);
+      return;
+    }
+    if (chess.isGameOver()) {
+      setHint(null);
+      return;
+    }
+    const reqId = ++hintReqId.current;
+    setHintLoading(true);
+    evaluate(fen, 12).then((bm) => {
+      // Drop stale results (board moved on while engine was thinking)
+      if (reqId !== hintReqId.current) return;
+      setHintLoading(false);
+      if (!bm.from || !bm.to) {
+        setHint(null);
+        return;
+      }
+      let san = bm.uci;
+      try {
+        const probe = new Chess(fen);
+        const m = probe.move({ from: bm.from, to: bm.to, promotion: bm.promotion as any });
+        if (m) san = m.san;
+      } catch {}
+      setHint({ san, cp: bm.cp, mate: bm.mate });
+    });
+    return () => {
+      hintReqId.current++;
+      stopEngine();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fen, engineReady, hintsEnabled, hostSide]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -114,6 +159,51 @@ export default function InterviewPanel({ startedAt, budgetSec = DEFAULT_BUDGET, 
         <Stat label={t('interview.checks')} value={stats.checks} />
         <Stat label={t('interview.voiced')} value={`${stats.voiced} / ${stats.total}`} />
       </div>
+
+      {/* Engine hint — only the recruiter / host sees this so they don't have to be a chess pro. */}
+      {hostSide && (
+        <div className="mb-4 rounded-xl border border-blue-500/30 bg-blue-500/5 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Lightbulb className="w-4 h-4 text-blue-400" />
+            <span className="text-xs font-semibold uppercase tracking-wide text-blue-400">
+              {t('interview.hint.title')}
+            </span>
+            <label className="ml-auto text-[10px] text-gray-500 flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hintsEnabled}
+                onChange={(e) => setHintsEnabled(e.target.checked)}
+                className="accent-blue-500"
+              />
+              {t('interview.hint.toggle')}
+            </label>
+          </div>
+          {!hintsEnabled ? (
+            <div className="text-xs text-gray-500">·</div>
+          ) : !engineReady ? (
+            <div className="text-xs text-gray-500 flex items-center gap-1.5">
+              <Loader2 className="w-3 h-3 animate-spin" /> {t('interview.hint.notReady')}
+            </div>
+          ) : chess.turn() !== hostSide ? (
+            <div className="text-xs text-gray-500">{t('interview.hint.opponent')}</div>
+          ) : hintLoading || !hint ? (
+            <div className="text-xs text-gray-500 flex items-center gap-1.5">
+              <Loader2 className="w-3 h-3 animate-spin" /> {t('interview.hint.thinking')}
+            </div>
+          ) : (
+            <div className="flex items-baseline justify-between">
+              <span className="font-mono font-bold text-2xl text-blue-300">{hint.san}</span>
+              <span className="text-xs text-gray-500 font-mono">
+                {hint.mate !== null
+                  ? `M${Math.abs(hint.mate)}`
+                  : hint.cp !== null
+                  ? `${hint.cp >= 0 ? '+' : ''}${(hint.cp / 100).toFixed(2)}`
+                  : ''}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {stats.lastSpoken && (
         <div className="mb-4 px-3 py-2 rounded-lg bg-amber-500/10 text-xs">

@@ -2,7 +2,10 @@
 
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Brain, Mic, Swords, Bot, Trophy, Users, Sparkles } from 'lucide-react';
+import {
+  Brain, Mic, Swords, Bot, Trophy, Users, Sparkles,
+  Briefcase, Zap, Plug, Check, ArrowRight,
+} from 'lucide-react';
 import { useT } from '@/components/LanguageProvider';
 
 export default function HomePage() {
@@ -21,8 +24,54 @@ export default function HomePage() {
     { href: '/play/online', title: t('home.modes.online.title'), desc: t('home.modes.online.desc'), icon: Swords, accent: 'from-amber-500 to-red-500' },
   ];
 
+  const enterpriseUseCases = [
+    { icon: Briefcase, title: t('home.enterprise.uc.hr.title'), desc: t('home.enterprise.uc.hr.desc') },
+    { icon: Zap, title: t('home.enterprise.uc.lead.title'), desc: t('home.enterprise.uc.lead.desc') },
+    { icon: Plug, title: t('home.enterprise.uc.api.title'), desc: t('home.enterprise.uc.api.desc') },
+  ];
+
+  const tiers = [
+    {
+      name: t('home.pricing.free.name'),
+      price: t('home.pricing.free.price'),
+      bullets: [t('home.pricing.free.bullet1'), t('home.pricing.free.bullet2'), t('home.pricing.free.bullet3')],
+      cta: t('home.pricing.free.cta'),
+      href: '/play/ai',
+      highlight: false,
+    },
+    {
+      name: t('home.pricing.team.name'),
+      price: t('home.pricing.team.price'),
+      suffix: t('home.pricing.month'),
+      bullets: [
+        t('home.pricing.team.bullet1'),
+        t('home.pricing.team.bullet2'),
+        t('home.pricing.team.bullet3'),
+        t('home.pricing.team.bullet4'),
+      ],
+      cta: t('home.pricing.team.cta'),
+      href: 'mailto:hr@psychovoice.chess?subject=PsychoVoice%20Team%20Trial',
+      highlight: true,
+    },
+    {
+      name: t('home.pricing.enterprise.name'),
+      price: t('home.pricing.enterprise.price'),
+      bullets: [
+        t('home.pricing.enterprise.bullet1'),
+        t('home.pricing.enterprise.bullet2'),
+        t('home.pricing.enterprise.bullet3'),
+        t('home.pricing.enterprise.bullet4'),
+        t('home.pricing.enterprise.bullet5'),
+      ],
+      cta: t('home.pricing.enterprise.cta'),
+      href: 'mailto:hr@psychovoice.chess?subject=PsychoVoice%20Enterprise',
+      highlight: false,
+    },
+  ];
+
   return (
     <div className="container mx-auto px-4 pt-10 pb-20 max-w-6xl">
+      {/* HERO */}
       <motion.section
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -54,6 +103,7 @@ export default function HomePage() {
         </div>
       </motion.section>
 
+      {/* MODE CARDS */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
         {modes.map((m, i) => (
           <motion.div
@@ -74,7 +124,8 @@ export default function HomePage() {
         ))}
       </section>
 
-      <section className="mb-20">
+      {/* PRODUCT FEATURES */}
+      <section className="mb-24">
         <h2 className="text-3xl md:text-4xl font-display font-bold mb-10 text-center">
           {t('home.features.title')} <span className="text-accent-500">{t('home.features.titleAccent')}</span>
         </h2>
@@ -100,12 +151,131 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="card text-center">
+      {/* ENTERPRISE */}
+      <section className="mb-24">
+        <div className="rounded-3xl bg-gradient-to-br from-amber-500/10 via-orange-500/10 to-rose-500/10 border border-amber-500/30 p-8 md:p-12">
+          <div className="flex items-center gap-2 mb-4">
+            <Briefcase className="w-4 h-4 text-amber-500" />
+            <span className="text-xs font-bold uppercase tracking-widest text-amber-500">{t('home.enterprise.eyebrow')}</span>
+          </div>
+          <h2 className="text-3xl md:text-5xl font-display font-bold mb-4 leading-[1.1]">
+            {t('home.enterprise.title')}
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mb-10">
+            {t('home.enterprise.subtitle')}
+          </p>
+
+          {/* Stats */}
+          <div className="grid grid-cols-3 gap-3 md:gap-6 mb-10">
+            <div className="text-center md:text-left">
+              <div className="text-2xl md:text-4xl font-display font-bold bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
+                12k+
+              </div>
+              <div className="text-xs md:text-sm text-gray-500 mt-1">{t('home.enterprise.stats.candidates')}</div>
+            </div>
+            <div className="text-center md:text-left">
+              <div className="text-2xl md:text-4xl font-display font-bold bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
+                5 min
+              </div>
+              <div className="text-xs md:text-sm text-gray-500 mt-1">{t('home.enterprise.stats.minutes')}</div>
+            </div>
+            <div className="text-center md:text-left">
+              <div className="text-2xl md:text-4xl font-display font-bold bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-transparent">
+                23
+              </div>
+              <div className="text-xs md:text-sm text-gray-500 mt-1">{t('home.enterprise.stats.signals')}</div>
+            </div>
+          </div>
+
+          {/* Use cases */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-10">
+            {enterpriseUseCases.map((uc, i) => (
+              <motion.div
+                key={uc.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.08 }}
+                className="rounded-xl bg-white/60 dark:bg-dark-900/40 backdrop-blur-sm p-5 border border-white/40 dark:border-white/10"
+              >
+                <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center mb-3">
+                  <uc.icon className="w-5 h-5 text-amber-500" />
+                </div>
+                <h3 className="font-semibold mb-1">{uc.title}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{uc.desc}</p>
+              </motion.div>
+            ))}
+          </div>
+
+          <a
+            href="mailto:hr@psychovoice.chess?subject=PsychoVoice%20Demo"
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:scale-[1.02] transition-transform shadow-lg shadow-orange-500/20"
+          >
+            {t('home.enterprise.cta')} <ArrowRight className="w-4 h-4" />
+          </a>
+        </div>
+      </section>
+
+      {/* PRICING */}
+      <section className="mb-20">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl md:text-4xl font-display font-bold mb-3">{t('home.pricing.title')}</h2>
+          <p className="text-gray-600 dark:text-gray-400">{t('home.pricing.subtitle')}</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+          {tiers.map((tier, i) => (
+            <motion.div
+              key={tier.name}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.08 }}
+              className={`card relative flex flex-col ${
+                tier.highlight ? 'border-2 border-accent-500 scale-[1.02] shadow-xl shadow-accent-500/20' : ''
+              }`}
+            >
+              {tier.highlight && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-gradient-to-r from-primary-500 to-accent-500 text-white">
+                  {t('home.pricing.popular')}
+                </div>
+              )}
+              <h3 className="text-xl font-display font-bold mb-2">{tier.name}</h3>
+              <div className="mb-5">
+                <span className="text-4xl font-display font-bold">{tier.price}</span>
+                {tier.suffix && <span className="text-sm text-gray-500 ml-1">{tier.suffix}</span>}
+              </div>
+              <ul className="space-y-2.5 mb-6 text-sm flex-1">
+                {tier.bullets.map((b) => (
+                  <li key={b} className="flex items-start gap-2">
+                    <Check className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                    <span className="text-gray-700 dark:text-gray-300">{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <a
+                href={tier.href}
+                className={`block text-center py-2.5 rounded-xl font-semibold transition ${
+                  tier.highlight
+                    ? 'bg-gradient-to-r from-primary-500 to-accent-500 text-white hover:scale-[1.02]'
+                    : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10'
+                }`}
+              >
+                {tier.cta}
+              </a>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Closing CTA */}
+      <section className="card text-center bg-gradient-to-br from-primary-500/5 to-accent-500/5 border border-primary-500/20">
         <h2 className="text-2xl md:text-3xl font-display font-bold mb-3">{t('home.b2b.title')}</h2>
         <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-5">
           {t('home.b2b.desc')}
         </p>
-        <a href="mailto:hr@psychovoice.chess" className="btn-ghost inline-block">{t('home.b2b.cta')}</a>
+        <a href="mailto:hr@psychovoice.chess" className="btn-primary inline-flex items-center gap-2">
+          {t('home.b2b.cta')} <ArrowRight className="w-4 h-4" />
+        </a>
       </section>
     </div>
   );

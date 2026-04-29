@@ -472,6 +472,18 @@ export default function OnlineRoom() {
 
   const onMove = (m: { from: string; to: string }) => {
     channelRef.current?.send({ type: 'broadcast', event: 'move', payload: m });
+    // Auto-start the official game on our first move so the clock kicks in
+    // and the opponent's UI synchronises. Idempotent: skipped once started.
+    if (!gameStarted) {
+      const startAt = Date.now();
+      channelRef.current?.send({
+        type: 'broadcast',
+        event: 'start',
+        payload: { startedAt: startAt, timeControlSec },
+      });
+      setStartedAt(startAt);
+      setGameStarted(true);
+    }
   };
 
   const handleResign = () => {
@@ -494,7 +506,9 @@ export default function OnlineRoom() {
   const isFlagFall = !!timeoutLoser;
   const isResigned = !!resignedSide;
   const gameEnded = isGameOver || isFlagFall || isResigned;
-  const movesDisabled = !gameStarted || !isPlayer || gameEnded;
+  // Board is playable as soon as the opponent is in the room. The first move
+  // auto-starts the official clock — players don't need to press Ready first.
+  const movesDisabled = !bothPlayersPresent || !isPlayer || gameEnded;
 
   // Determine outcome from caller's perspective (caller = WHITE in rated games).
   const computeMyResult = (): 'win' | 'loss' | 'draw' | 'resign' | null => {
@@ -751,7 +765,11 @@ export default function OnlineRoom() {
             }}
           />
           {isInterview && isHost && (
-            <InterviewPanel startedAt={startedAt ?? Date.now()} candidateLabel={role === 'w' ? blackName : whiteName} />
+            <InterviewPanel
+              startedAt={startedAt ?? Date.now()}
+              candidateLabel={role === 'w' ? blackName : whiteName}
+              hostSide={isPlayer ? (role as 'w' | 'b') : null}
+            />
           )}
           <MoveHistory />
           {!isInterview && isPlayer && <PsychoReport side={role as 'w' | 'b'} />}

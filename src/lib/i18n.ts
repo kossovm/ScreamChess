@@ -19,7 +19,7 @@ const dict = {
     'home.title.line2': 'your mind.',
     'home.subtitle':
       'PsychoVoice Chess analyzes not just your moves on the board — but your voice, your hesitations, your style. A psychological passport for every game you play.',
-    'home.cta.start': 'Start Playing',
+    'home.cta.start': 'Play vs AI',
     'home.cta.online': 'Play Online',
     'home.cta.leaderboard': 'Leaderboard',
     'home.modes.local.title': 'Local Duel',
@@ -42,6 +42,56 @@ const dict = {
     'home.b2b.desc':
       'A 5-minute match with PsychoVoice gives a primary risk-profile, adaptability and stress-tolerance reading for any candidate. B2B API access available.',
     'home.b2b.cta': 'Contact Sales',
+
+    // Enterprise
+    'home.enterprise.eyebrow': 'Enterprise',
+    'home.enterprise.title': 'Hire smarter — beyond the CV',
+    'home.enterprise.subtitle':
+      "A 5-minute chess interview reveals what 3 rounds of behavioural questions can't: how candidates think under pressure, where they take risks, when they break.",
+    'home.enterprise.uc.hr.title': 'HR pre-screening',
+    'home.enterprise.uc.hr.desc': 'Send a link, get a behavioural report. Cut your interview funnel by half.',
+    'home.enterprise.uc.lead.title': 'Leadership assessment',
+    'home.enterprise.uc.lead.desc': 'Identify decisive vs reactive thinkers across your existing team.',
+    'home.enterprise.uc.api.title': 'API & embed',
+    'home.enterprise.uc.api.desc': 'Drop the assessment into your ATS or onboarding with one POST request.',
+    'home.enterprise.cta': 'Book a demo',
+    'home.enterprise.stats.candidates': 'candidates analysed',
+    'home.enterprise.stats.minutes': 'avg. interview length',
+    'home.enterprise.stats.signals': 'behavioural signals tracked per game',
+
+    // Pricing
+    'home.pricing.title': 'Simple pricing',
+    'home.pricing.subtitle': 'Pay only for what you use. No seats, no surprises.',
+    'home.pricing.month': '/ month',
+    'home.pricing.popular': 'Most popular',
+    'home.pricing.free.name': 'Hobby',
+    'home.pricing.free.price': 'Free',
+    'home.pricing.free.bullet1': 'Unlimited casual games',
+    'home.pricing.free.bullet2': 'Stockfish coach (engine analysis)',
+    'home.pricing.free.bullet3': 'Voice control + offline recognition',
+    'home.pricing.free.cta': 'Get started',
+    'home.pricing.team.name': 'Team',
+    'home.pricing.team.price': '$49',
+    'home.pricing.team.bullet1': '50 candidate interviews / month',
+    'home.pricing.team.bullet2': 'Behavioural HR reports',
+    'home.pricing.team.bullet3': 'Voice transcripts & emotion signals',
+    'home.pricing.team.bullet4': 'Shared candidate workspace',
+    'home.pricing.team.cta': 'Start trial',
+    'home.pricing.enterprise.name': 'Enterprise',
+    'home.pricing.enterprise.price': 'Custom',
+    'home.pricing.enterprise.bullet1': 'Unlimited candidates',
+    'home.pricing.enterprise.bullet2': 'Public API + webhooks',
+    'home.pricing.enterprise.bullet3': 'White-label embed',
+    'home.pricing.enterprise.bullet4': 'SSO, audit log, SLA',
+    'home.pricing.enterprise.bullet5': 'Dedicated success manager',
+    'home.pricing.enterprise.cta': 'Talk to sales',
+
+    // Hint card in interview
+    'interview.hint.title': 'Suggested move',
+    'interview.hint.thinking': 'Engine thinking…',
+    'interview.hint.notReady': 'Engine warming up…',
+    'interview.hint.opponent': "Opponent's turn",
+    'interview.hint.toggle': 'Show engine hints',
 
     // Local play
     'play.local.title': 'Local Duel',
@@ -307,7 +357,7 @@ const dict = {
     'home.title.line2': 'твой разум.',
     'home.subtitle':
       'PsychoVoice Chess анализирует не только ходы на доске, но и твой голос, паузы, стиль. Психологический паспорт после каждой партии.',
-    'home.cta.start': 'Начать играть',
+    'home.cta.start': 'Сыграть с ИИ',
     'home.cta.online': 'Играть онлайн',
     'home.cta.leaderboard': 'Рейтинг',
     'home.modes.local.title': 'Локальная партия',
@@ -330,6 +380,56 @@ const dict = {
     'home.b2b.desc':
       '5-минутная партия в PsychoVoice даёт первичный риск-профиль, оценку адаптивности и стрессоустойчивости любого кандидата. Доступен B2B API.',
     'home.b2b.cta': 'Связаться с нами',
+
+    // Enterprise
+    'home.enterprise.eyebrow': 'Энтерпрайз',
+    'home.enterprise.title': 'Нанимай умнее — за пределами CV',
+    'home.enterprise.subtitle':
+      'Пятиминутная партия раскрывает то, что не покажут три раунда поведенческих интервью: как кандидат думает под давлением, где рискует, когда срывается.',
+    'home.enterprise.uc.hr.title': 'Скрининг для HR',
+    'home.enterprise.uc.hr.desc': 'Скинь ссылку — получи поведенческий отчёт. Воронка интервью сокращается вдвое.',
+    'home.enterprise.uc.lead.title': 'Оценка лидеров',
+    'home.enterprise.uc.lead.desc': 'Найди в команде решительных и реактивных за один матч.',
+    'home.enterprise.uc.api.title': 'API и встраивание',
+    'home.enterprise.uc.api.desc': 'Один POST — и ассессмент в твоём ATS или onboarding-флоу.',
+    'home.enterprise.cta': 'Заказать демо',
+    'home.enterprise.stats.candidates': 'кандидатов оценено',
+    'home.enterprise.stats.minutes': 'средняя длина интервью',
+    'home.enterprise.stats.signals': 'поведенческих сигналов на партию',
+
+    // Pricing
+    'home.pricing.title': 'Прозрачные тарифы',
+    'home.pricing.subtitle': 'Плати только за то, что используешь. Без сюрпризов и seat-моделей.',
+    'home.pricing.month': '/ мес',
+    'home.pricing.popular': 'Популярный',
+    'home.pricing.free.name': 'Хобби',
+    'home.pricing.free.price': 'Бесплатно',
+    'home.pricing.free.bullet1': 'Безлимит казуальных партий',
+    'home.pricing.free.bullet2': 'Тренер на Stockfish (анализ движка)',
+    'home.pricing.free.bullet3': 'Голос + локальное распознавание',
+    'home.pricing.free.cta': 'Начать',
+    'home.pricing.team.name': 'Команда',
+    'home.pricing.team.price': '$49',
+    'home.pricing.team.bullet1': '50 интервью кандидатов в месяц',
+    'home.pricing.team.bullet2': 'Поведенческие HR-отчёты',
+    'home.pricing.team.bullet3': 'Транскрипты голоса и эмоций',
+    'home.pricing.team.bullet4': 'Общая рабочая область',
+    'home.pricing.team.cta': 'Попробовать бесплатно',
+    'home.pricing.enterprise.name': 'Энтерпрайз',
+    'home.pricing.enterprise.price': 'По запросу',
+    'home.pricing.enterprise.bullet1': 'Безлимит кандидатов',
+    'home.pricing.enterprise.bullet2': 'Публичный API + вебхуки',
+    'home.pricing.enterprise.bullet3': 'White-label встраивание',
+    'home.pricing.enterprise.bullet4': 'SSO, audit log, SLA',
+    'home.pricing.enterprise.bullet5': 'Персональный customer success',
+    'home.pricing.enterprise.cta': 'Связаться',
+
+    // Hint card in interview
+    'interview.hint.title': 'Подсказка хода',
+    'interview.hint.thinking': 'Движок думает…',
+    'interview.hint.notReady': 'Движок прогревается…',
+    'interview.hint.opponent': 'Сейчас ход кандидата',
+    'interview.hint.toggle': 'Показывать подсказки движка',
 
     // Local play
     'play.local.title': 'Локальная партия',
