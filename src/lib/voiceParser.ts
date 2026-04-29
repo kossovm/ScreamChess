@@ -61,7 +61,7 @@ const FILLER_WORDS = new Set([
 // These are resolved contextually below: a duplicate file token is treated as filler.
 
 export interface ParsedVoiceMove {
-  type: 'move' | 'castle-k' | 'castle-q' | 'resign' | 'draw' | 'unknown';
+  type: 'move' | 'castle-k' | 'castle-q' | 'resign' | 'draw' | 'undo' | 'unknown';
   from?: string;
   to?: string;
   promotion?: string;
@@ -84,6 +84,7 @@ export function parseVoiceCommand(transcript: string, chess: Chess): ParsedVoice
   if (isCastleQ(raw)) return { type: 'castle-q', raw };
   if (/(resign|сдаюсь|сдаемся|сдаёмся)/.test(raw)) return { type: 'resign', raw };
   if (/(draw|ничья|ничью)/.test(raw)) return { type: 'draw', raw };
+  if (/(\bundo\b|\bback\b|отмена|отмени|откати|назад|вернуть)/.test(raw)) return { type: 'undo', raw };
 
   // Direct algebraic notation: "e2 e4", "Nf3", "e2-e4"
   const algebraicMatch = raw.match(/([a-h])\s*([1-8])\s*[-x→to]*\s*([a-h])\s*([1-8])/i);

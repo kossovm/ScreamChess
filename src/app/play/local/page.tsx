@@ -39,7 +39,7 @@ export default function LocalPlayPage() {
         </div>
         <div className="space-y-4">
           <GameInfo white={p1} black={p2} />
-          <VoiceControl />
+          <VoiceControl onUndo={() => undo(1)} />
           <MoveHistory />
           <PsychoReport side="both" whiteName={p1} blackName={p2} />
           <AICoach white={p1} black={p2} result={result ?? '*'} />

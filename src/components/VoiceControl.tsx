@@ -15,6 +15,7 @@ interface Props {
   lang?: string;
   disabled?: boolean;
   onMove?: (move: { from: string; to: string }) => void;
+  onUndo?: () => number; // returns number of plies actually undone
   hotkey?: string;
 }
 
@@ -34,7 +35,7 @@ const ERROR_KEY: Record<VoiceErrorCode, TranslationKey> = {
   'unknown': 'voice.error.unknown',
 };
 
-export default function VoiceControl({ lang, disabled, onMove, hotkey = 'v' }: Props) {
+export default function VoiceControl({ lang, disabled, onMove, onUndo, hotkey = 'v' }: Props) {
   const { locale, t } = useLanguage();
   const effectiveLang = lang ?? (locale === 'ru' ? 'ru-RU' : 'en-US');
 
@@ -51,7 +52,7 @@ export default function VoiceControl({ lang, disabled, onMove, hotkey = 'v' }: P
   const local = useVoskRecognition({ lang: effectiveLang });
 
   const active = engine === 'cloud' ? cloud : local;
-  const { chess, makeMove, isGameOver } = useGameStore();
+  const { chess, makeMove, isGameOver, undo: storeUndo } = useGameStore();
   const [history, setHistory] = useState<string[]>([]);
 
   const setEngineAndPersist = (e: Engine) => {
@@ -93,6 +94,10 @@ export default function VoiceControl({ lang, disabled, onMove, hotkey = 'v' }: P
       toast(`${t('voice.resigned')} 🏳️`);
     } else if (parsed.type === 'draw') {
       toast(`${t('voice.draw')} 🤝`);
+    } else if (parsed.type === 'undo') {
+      const popped = onUndo ? onUndo() : storeUndo(1);
+      if (popped > 0) toast.success(`↩️ ${t('voice.undone')}`);
+      else toast(t('voice.nothingToUndo'));
     } else {
       toast.error(`${t('voice.cantParse')} "${transcript}"`);
     }

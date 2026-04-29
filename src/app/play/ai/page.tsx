@@ -99,7 +99,19 @@ export default function AIPlayPage() {
         </div>
         <div className="space-y-4">
           <GameInfo white={orientation === 'white' ? youLabel : sfLabel} black={orientation === 'white' ? sfLabel : youLabel} evalCp={evalCp} evalMate={evalMate} />
-          <VoiceControl />
+          <VoiceControl
+            onUndo={() => {
+              stop();
+              thinkingRef.current = true;
+              const aiSide = orientation === 'white' ? 'b' : 'w';
+              const toPop = chess.turn() === aiSide ? 1 : 2;
+              const popped = undo(toPop);
+              setEvalCp(null);
+              setEvalMate(null);
+              setTimeout(() => { thinkingRef.current = false; }, 50);
+              return popped;
+            }}
+          />
           <MoveHistory />
           <PsychoReport side={orientation === 'white' ? 'w' : 'b'} />
           <AICoach
