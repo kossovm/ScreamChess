@@ -25,30 +25,40 @@ export default function ChessBoard({ orientation = 'white', disabled, playerSide
   const { theme } = useTheme();
   const t = useT();
 
+  // The very first move with white pawns is always allowed — even if `disabled`
+  // is true (e.g. presence hasn't synced yet, host flag is missing). This guards
+  // against the painful "white can't make first move" race we kept hitting.
+  const isFreshGameWhiteMove = (pieceColor: string | undefined) =>
+    pieceColor === 'w' && chess.history().length === 0 && playerSide !== 'b';
+
   const onPieceDrop = (from: string, to: string, piece: string) => {
     console.log('[board] drop attempt', {
       from, to, piece,
       disabled, isGameOver,
       playerSide, chessTurn: chess.turn(),
+      historyLen: chess.history().length,
     });
-    if (disabled) {
-      console.log('[board] drop rejected: disabled');
-      return false;
-    }
-    if (isGameOver) {
-      console.log('[board] drop rejected: game over');
-      return false;
-    }
-    // piece looks like 'wP', 'bN', etc. First char is colour.
+    if (isGameOver) return false;
     const pieceColor = piece?.[0] as 'w' | 'b' | undefined;
+
+    // Wrong colour for online play
     if (playerSide && pieceColor && pieceColor !== playerSide) {
       toast.error(t('online.notYourPiece'));
       return false;
     }
-    if (playerSide && chess.turn() !== playerSide) {
-      toast.error(t('online.notYourTurn'));
-      return false;
+
+    // First-move escape hatch: skip the turn / disabled gates
+    if (!isFreshGameWhiteMove(pieceColor)) {
+      if (disabled) {
+        console.log('[board] drop rejected: disabled');
+        return false;
+      }
+      if (playerSide && chess.turn() !== playerSide) {
+        toast.error(t('online.notYourTurn'));
+        return false;
+      }
     }
+
     const ok = makeMove({ from, to, promotion: 'q' });
     if (!ok) console.log('[board] makeMove returned false (illegal move)');
     if (ok && onMove) onMove({ from, to, promotion: 'q' });
@@ -56,12 +66,12 @@ export default function ChessBoard({ orientation = 'white', disabled, playerSide
   };
 
   const isDraggablePiece = ({ piece }: { piece: string }) => {
-    if (disabled || isGameOver) return false;
+    if (isGameOver) return false;
     const pieceColor = piece?.[0] as 'w' | 'b' | undefined;
-    // Only colour gating happens here — turn-order is enforced inside onPieceDrop
-    // so the user can pick up their pieces freely and just gets a toast if they
-    // try to drop out of turn.
     if (playerSide && pieceColor && pieceColor !== playerSide) return false;
+    // Always let white pick up its pieces in the starting position.
+    if (isFreshGameWhiteMove(pieceColor)) return true;
+    if (disabled) return false;
     return true;
   };
 

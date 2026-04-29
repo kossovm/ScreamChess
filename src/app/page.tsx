@@ -50,7 +50,7 @@ export default function HomePage() {
         t('home.pricing.team.bullet4'),
       ],
       cta: t('home.pricing.team.cta'),
-      href: 'mailto:hr@psychovoice.chess?subject=PsychoVoice%20Team%20Trial',
+      href: 'mailto:kossovm@outlook.com?subject=PsychoVoice%20Team%20Trial',
       highlight: true,
     },
     {
@@ -64,7 +64,7 @@ export default function HomePage() {
         t('home.pricing.enterprise.bullet5'),
       ],
       cta: t('home.pricing.enterprise.cta'),
-      href: 'mailto:hr@psychovoice.chess?subject=PsychoVoice%20Enterprise',
+      href: 'mailto:kossovm@outlook.com?subject=PsychoVoice%20Enterprise',
       highlight: false,
     },
   ];
@@ -208,7 +208,7 @@ export default function HomePage() {
           </div>
 
           <a
-            href="mailto:hr@psychovoice.chess?subject=PsychoVoice%20Demo"
+            href="mailto:kossovm@outlook.com?subject=PsychoVoice%20Demo"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white hover:scale-[1.02] transition-transform shadow-lg shadow-orange-500/20"
           >
             {t('home.enterprise.cta')} <ArrowRight className="w-4 h-4" />
@@ -273,7 +273,7 @@ export default function HomePage() {
         <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-5">
           {t('home.b2b.desc')}
         </p>
-        <a href="mailto:hr@psychovoice.chess" className="btn-primary inline-flex items-center gap-2">
+        <a href="mailto:kossovm@outlook.com" className="btn-primary inline-flex items-center gap-2">
           {t('home.b2b.cta')} <ArrowRight className="w-4 h-4" />
         </a>
       </section>
