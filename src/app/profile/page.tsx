@@ -19,6 +19,11 @@ export default function ProfilePage() {
   const [editingCity, setEditingCity] = useState(false);
   const [savingCity, setSavingCity] = useState(false);
   const [charityLoading, setCharityLoading] = useState(false);
+  const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [editingNames, setEditingNames] = useState(false);
+  const [savingNames, setSavingNames] = useState(false);
 
   useEffect(() => {
     if (!user || !isSupabaseConfigured) return;
@@ -32,8 +37,15 @@ export default function ProfilePage() {
       setGames(g ?? []);
       const { data: psy } = await supabase.from('psycho_profiles').select('*').eq('user_id', user.id).single();
       setProfile(psy ?? null);
-      const { data: prof } = await supabase.from('profiles').select('city').eq('id', user.id).single();
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('city, username, first_name, last_name')
+        .eq('id', user.id)
+        .single();
       if (prof?.city) setCity(prof.city);
+      if (prof?.username) setUsername(prof.username);
+      if (prof?.first_name) setFirstName(prof.first_name);
+      if (prof?.last_name) setLastName(prof.last_name);
     })();
   }, [user]);
 
@@ -45,6 +57,25 @@ export default function ProfilePage() {
     else if (res.error === 'already_used') toast.error(t('profile.charityAlreadyUsed'));
     else if (res.error === 'not_eligible') toast(t('profile.charityNotEligible'));
     else toast.error(res.error ?? 'Error');
+  };
+
+  const saveNames = async () => {
+    if (!user) return;
+    setSavingNames(true);
+    const update: any = {
+      first_name: firstName.trim().slice(0, 60) || null,
+      last_name: lastName.trim().slice(0, 60) || null,
+    };
+    if (username.trim()) update.username = username.trim().slice(0, 40);
+    const { error } = await supabase.from('profiles').update(update).eq('id', user.id);
+    setSavingNames(false);
+    if (error) {
+      toast.error(error.message);
+    } else {
+      toast.success(t('profile.nameSaved'));
+      setEditingNames(false);
+      refresh();
+    }
   };
 
   const saveCity = async () => {
@@ -84,6 +115,40 @@ export default function ProfilePage() {
           <h1 className="text-2xl font-display font-bold">{user.email}</h1>
           <p className="text-sm text-gray-500">{t('profile.memberSince')} {new Date(user.created_at!).toLocaleDateString()}</p>
         </div>
+      </div>
+
+      {/* Name editor */}
+      <div className="card mb-3">
+        <div className="flex items-center gap-2 mb-2">
+          <User className="w-4 h-4 text-primary-500" />
+          <h3 className="text-sm font-semibold">{t('profile.firstName')} / {t('profile.lastName')}</h3>
+          {!editingNames && (
+            <button onClick={() => setEditingNames(true)} className="ml-auto btn-ghost p-1.5" aria-label="edit">
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        {editingNames ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder={t('profile.firstName')} className="input text-sm" />
+              <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder={t('profile.lastName')} className="input text-sm" />
+            </div>
+            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder={t('profile.username')} className="input text-sm" />
+            <button onClick={saveNames} disabled={savingNames} className="btn-primary text-sm py-1.5 px-3">
+              {savingNames ? '…' : t('profile.save')}
+            </button>
+          </div>
+        ) : (
+          <div className="text-sm">
+            <div className="font-medium">
+              {firstName || lastName
+                ? [firstName, lastName].filter(Boolean).join(' ')
+                : <span className="text-gray-500 italic">—</span>}
+            </div>
+            {username && <div className="text-xs text-gray-500 font-mono mt-0.5">@{username}</div>}
+          </div>
+        )}
       </div>
 
       {/* City editor */}

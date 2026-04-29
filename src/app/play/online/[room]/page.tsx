@@ -32,7 +32,7 @@ const TIME_OPTIONS_SEC = [60, 180, 300, 600, 1800, 0]; // 1m, 3m, 5m, 10m, 30m, 
 export default function OnlineRoom() {
   const { room } = useParams<{ room: string }>();
   const searchParams = useSearchParams();
-  const { reset, makeMove, fen, history, undo, chess, isGameOver, turnStartedAt, result } = useGameStore();
+  const { reset, makeMove, fen, history, undo, chess, isGameOver, turnStartedAt, result, loadSans } = useGameStore();
   const t = useT();
   const { user } = useAuth();
   const { economy, applyMatchResult } = useUserEconomy();
@@ -101,6 +101,10 @@ export default function OnlineRoom() {
   const [now, setNow] = useState(() => Date.now());
   const [iAmReady, setIAmReady] = useState(false);
   const [timeoutLoser, setTimeoutLoser] = useState<'w' | 'b' | null>(null);
+  // Mirror iAmReady in a ref so the channel.subscribe callback (which captures
+  // values from its render) always tracks the latest state.
+  const readyRef = useRef(iAmReady);
+  useEffect(() => { readyRef.current = iAmReady; }, [iAmReady]);
 
   // Restore game-in-progress state on mount so a refresh doesn't lock the player
   // into "Ready" with a disabled board.
@@ -252,6 +256,37 @@ export default function OnlineRoom() {
       .on('broadcast', { event: 'time-control' }, ({ payload }: any) => {
         if (typeof payload?.seconds === 'number') setTimeControlSec(payload.seconds);
       })
+      .on('broadcast', { event: 'state-request' }, ({ payload }: any) => {
+        // A peer just (re)joined and is asking for the current state.
+        // Anyone who has the game in progress responds with a snapshot.
+        if (!payload?.from || payload.from === presenceKey) return;
+        if (history.length === 0 && !gameStarted) return;
+        channelRef.current?.send({
+          type: 'broadcast',
+          event: 'state-snapshot',
+          payload: {
+            to: payload.from,
+            sans: history.map((h) => h.san),
+            thinkMs: history.map((h) => h.thinkMs),
+            startedAt,
+            timeControlSec,
+            gameStarted,
+            resignedSide,
+            timeoutLoser,
+          },
+        });
+      })
+      .on('broadcast', { event: 'state-snapshot' }, ({ payload }: any) => {
+        if (!payload || payload.to !== presenceKey) return;
+        if (Array.isArray(payload.sans)) {
+          loadSans(payload.sans, payload.thinkMs);
+        }
+        if (typeof payload.startedAt === 'number') setStartedAt(payload.startedAt);
+        if (typeof payload.timeControlSec === 'number') setTimeControlSec(payload.timeControlSec);
+        if (payload.gameStarted) setGameStarted(true);
+        if (payload.resignedSide === 'w' || payload.resignedSide === 'b') setResignedSide(payload.resignedSide);
+        if (payload.timeoutLoser === 'w' || payload.timeoutLoser === 'b') setTimeoutLoser(payload.timeoutLoser);
+      })
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState() as Record<string, Array<{ joinedAt?: number; ready?: boolean }>>;
         // One key can have multiple presence entries (StrictMode, reconnects).
@@ -270,11 +305,15 @@ export default function OnlineRoom() {
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await channel.track({ joinedAt, ready: false });
-          // Tell the other side who I am (auth user id) so rated games can credit/debit the right account.
+          // Use the latest ready value (e.g., restored from localStorage) so a reload
+          // doesn't dump us back to "Not ready".
+          await channel.track({ joinedAt, ready: readyRef.current });
           if (user?.id) {
             channel.send({ type: 'broadcast', event: 'identify', payload: { userId: user.id, presenceKey } });
           }
+          // Ask everyone for the current state. If the game is in progress on
+          // their side, they'll send us a snapshot we can replay.
+          channel.send({ type: 'broadcast', event: 'state-request', payload: { from: presenceKey } });
         }
       });
 
@@ -317,6 +356,37 @@ export default function OnlineRoom() {
   useEffect(() => {
     if (isInterview && bothPlayersPresent) setVoiceEnabled(true);
   }, [isInterview, bothPlayersPresent]);
+
+  // 30-second forfeit if the opponent goes offline mid-game.
+  const [forfeitCountdown, setForfeitCountdown] = useState<number | null>(null);
+  useEffect(() => {
+    if (!gameStarted || isGameOver || resignedSide || timeoutLoser) {
+      setForfeitCountdown(null);
+      return;
+    }
+    if (!isPlayer) return;
+    const opponentPresent = !!opponent;
+    if (opponentPresent) {
+      setForfeitCountdown(null);
+      return;
+    }
+    const deadline = Date.now() + 30_000;
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      setForfeitCountdown(left);
+      if (left === 0) {
+        const oppSide = role === 'w' ? 'b' : 'w';
+        setResignedSide(oppSide);
+        channelRef.current?.send({ type: 'broadcast', event: 'resign', payload: { side: oppSide, reason: 'forfeit' } });
+        toast(t('online.opponentForfeited'), { icon: '⌛' });
+        clearInterval(id);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opponent, gameStarted, isGameOver, resignedSide, timeoutLoser, isPlayer, role]);
 
   // Lobby visibility lifecycle:
   //  · while the host is alone in an open rated room → keep a row in open_lobbies
@@ -539,8 +609,14 @@ export default function OnlineRoom() {
         </div>
       )}
 
-      {!bothPlayersPresent && (
+      {!bothPlayersPresent && !gameStarted && (
         <div className="card mb-4 text-sm text-amber-500">{t('online.waiting')}</div>
+      )}
+
+      {forfeitCountdown !== null && forfeitCountdown > 0 && (
+        <div className="card mb-4 text-sm border border-amber-500/40 bg-amber-500/10 text-amber-500">
+          ⌛ {t('online.opponentOffline', { sec: forfeitCountdown })}
+        </div>
       )}
 
       {role === 'spectator' && (

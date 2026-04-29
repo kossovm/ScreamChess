@@ -26,7 +26,19 @@ export default function ChessBoard({ orientation = 'white', disabled, playerSide
   const t = useT();
 
   const onPieceDrop = (from: string, to: string, piece: string) => {
-    if (disabled || isGameOver) return false;
+    console.log('[board] drop attempt', {
+      from, to, piece,
+      disabled, isGameOver,
+      playerSide, chessTurn: chess.turn(),
+    });
+    if (disabled) {
+      console.log('[board] drop rejected: disabled');
+      return false;
+    }
+    if (isGameOver) {
+      console.log('[board] drop rejected: game over');
+      return false;
+    }
     // piece looks like 'wP', 'bN', etc. First char is colour.
     const pieceColor = piece?.[0] as 'w' | 'b' | undefined;
     if (playerSide && pieceColor && pieceColor !== playerSide) {
@@ -38,6 +50,7 @@ export default function ChessBoard({ orientation = 'white', disabled, playerSide
       return false;
     }
     const ok = makeMove({ from, to, promotion: 'q' });
+    if (!ok) console.log('[board] makeMove returned false (illegal move)');
     if (ok && onMove) onMove({ from, to, promotion: 'q' });
     return ok;
   };

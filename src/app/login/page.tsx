@@ -62,6 +62,12 @@ export default function LoginPage() {
             {mode === 'in' ? t('login.signup') : t('login.signin')}
           </button>
         </p>
+
+        <div className="mt-5 px-3 py-2 rounded-lg bg-amber-500/10 text-xs text-amber-500/90">
+          <div className="font-semibold mb-1">{t('login.testHint')}</div>
+          <div className="font-mono">kossovm@outlook.com</div>
+          <div className="font-mono">oxmssh@gmail.com</div>
+        </div>
       </div>
     </div>
   );

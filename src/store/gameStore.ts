@@ -17,6 +17,8 @@ interface GameState {
   undo: (count?: number) => number;
   loadFen: (fen: string) => void;
   loadPgn: (pgn: string) => void;
+  /** Replay a list of SAN moves (used when reconnecting and syncing from peer). */
+  loadSans: (sans: string[], thinkMs?: number[]) => void;
 }
 
 const newChess = () => new Chess();
@@ -102,5 +104,42 @@ export const useGameStore = create<GameState>((set, get) => ({
     const c = newChess();
     c.loadPgn(pgn);
     set({ chess: c, fen: c.fen(), history: [], turnStartedAt: Date.now(), isGameOver: c.isGameOver(), result: null, lastMove: null });
+  },
+
+  loadSans: (sans, thinkMs) => {
+    const c = newChess();
+    const history: MoveRecord[] = [];
+    for (let i = 0; i < sans.length; i++) {
+      try {
+        const m = c.move(sans[i]);
+        if (!m) break;
+        history.push({
+          san: m.san,
+          from: m.from,
+          to: m.to,
+          fen: c.fen(),
+          thinkMs: thinkMs?.[i] ?? 0,
+          ply: i + 1,
+        });
+      } catch {
+        break;
+      }
+    }
+    const last = history[history.length - 1];
+    let isOver = c.isGameOver();
+    let result: string | null = null;
+    if (isOver) {
+      if (c.isCheckmate()) result = c.turn() === 'w' ? '0-1' : '1-0';
+      else if (c.isDraw() || c.isStalemate() || c.isThreefoldRepetition()) result = '1/2-1/2';
+    }
+    set({
+      chess: c,
+      fen: c.fen(),
+      history,
+      turnStartedAt: Date.now(),
+      isGameOver: isOver,
+      result,
+      lastMove: last ? { from: last.from, to: last.to } : null,
+    });
   },
 }));

@@ -97,6 +97,8 @@ const dict = {
     'online.opponentLostOnTime': 'Opponent lost on time',
     'online.undoRequest': 'Opponent requested an undo',
     'online.undoApplied': 'Move rolled back',
+    'online.opponentOffline': 'Opponent offline · forfeit in {sec}s',
+    'online.opponentForfeited': 'Opponent forfeited (offline > 30s)',
     'online.findOpponent': 'Find Opponent',
     'online.findOpponent.desc': 'Rated 1v1. We pair you with someone of similar rating.',
     'online.searching': 'Searching for opponent…',
@@ -136,6 +138,10 @@ const dict = {
     'profile.cityUpdated': 'City saved',
     'profile.save': 'Save',
     'profile.editCity': 'Set city',
+    'profile.firstName': 'First name',
+    'profile.lastName': 'Last name',
+    'profile.username': 'Username',
+    'profile.nameSaved': 'Name saved',
 
     // Interview
     'interview.banner': 'Interview Mode · 5 min',
@@ -269,6 +275,7 @@ const dict = {
     'login.confirmEmail': 'Check your email to confirm.',
     'login.notConfigured': 'Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.',
     'login.authError': 'Auth error',
+    'login.testHint': 'Demo accounts:',
 
     // Profile
     'profile.loading': 'Loading…',
@@ -378,6 +385,8 @@ const dict = {
     'online.opponentLostOnTime': 'Соперник проиграл по времени',
     'online.undoRequest': 'Соперник откатил ход',
     'online.undoApplied': 'Ход откачен',
+    'online.opponentOffline': 'Соперник офлайн · дисквалификация через {sec}с',
+    'online.opponentForfeited': 'Соперник дисквалифицирован (офлайн > 30с)',
     'online.findOpponent': 'Найти соперника',
     'online.findOpponent.desc': 'Рейтинговая 1v1. Подбираем игрока с похожим рейтингом.',
     'online.searching': 'Ищем соперника…',
@@ -417,6 +426,10 @@ const dict = {
     'profile.cityUpdated': 'Город сохранён',
     'profile.save': 'Сохранить',
     'profile.editCity': 'Указать город',
+    'profile.firstName': 'Имя',
+    'profile.lastName': 'Фамилия',
+    'profile.username': 'Никнейм',
+    'profile.nameSaved': 'Имя сохранено',
 
     // Interview
     'interview.banner': 'Режим интервью · 5 мин',
@@ -550,6 +563,7 @@ const dict = {
     'login.confirmEmail': 'Проверь почту, чтобы подтвердить аккаунт.',
     'login.notConfigured': 'Supabase не настроен. Задай NEXT_PUBLIC_SUPABASE_URL и NEXT_PUBLIC_SUPABASE_ANON_KEY.',
     'login.authError': 'Ошибка авторизации',
+    'login.testHint': 'Тестовые аккаунты:',
 
     // Profile
     'profile.loading': 'Загрузка…',

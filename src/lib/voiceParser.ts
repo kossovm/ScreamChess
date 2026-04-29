@@ -76,8 +76,18 @@ function isCastleQ(s: string) {
   return /(long.?castle|queen.?side|длинная рокировка|длинной рокировк|o-?o-?o|0-?0-?0)/.test(s);
 }
 
+// Vosk often glues short tokens together. Pre-split common cases so the
+// tokenizer below can recognise them as separate file/rank words.
+function expandCommonMishears(s: string): string {
+  return s
+    .replace(/\bедва\b/g, 'е два')   // "е два" → recognised as "едва" (Russian: "barely")
+    .replace(/\bибэ\b/g, 'и бэ')      // "и бэ" misheard
+    .replace(/\bитри\b/g, 'е три')
+    .replace(/\bичетыре\b/g, 'е четыре');
+}
+
 export function parseVoiceCommand(transcript: string, chess: Chess): ParsedVoiceMove {
-  const raw = transcript.toLowerCase().trim();
+  const raw = expandCommonMishears(transcript.toLowerCase().trim());
   if (!raw) return { type: 'unknown', raw };
 
   if (isCastleK(raw)) return { type: 'castle-k', raw };
