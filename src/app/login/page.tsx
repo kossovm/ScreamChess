@@ -67,6 +67,7 @@ export default function LoginPage() {
           <div className="font-semibold mb-1">{t('login.testHint')}</div>
           <div className="font-mono">kossovm@outlook.com</div>
           <div className="font-mono">oxmssh@gmail.com</div>
+          <div className="font-mono mt-1 opacity-80">{t('login.testPassword')}</div>
         </div>
       </div>
     </div>

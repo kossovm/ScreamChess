@@ -325,7 +325,8 @@ const dict = {
     'login.confirmEmail': 'Check your email to confirm.',
     'login.notConfigured': 'Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY.',
     'login.authError': 'Auth error',
-    'login.testHint': 'Demo accounts:',
+    'login.testHint': 'Demo accounts (sign-up & login both work):',
+    'login.testPassword': 'password: 123456',
 
     // Profile
     'profile.loading': 'Loading…',
@@ -663,7 +664,8 @@ const dict = {
     'login.confirmEmail': 'Проверь почту, чтобы подтвердить аккаунт.',
     'login.notConfigured': 'Supabase не настроен. Задай NEXT_PUBLIC_SUPABASE_URL и NEXT_PUBLIC_SUPABASE_ANON_KEY.',
     'login.authError': 'Ошибка авторизации',
-    'login.testHint': 'Тестовые аккаунты:',
+    'login.testHint': 'Тестовые аккаунты (регистрация и вход работают):',
+    'login.testPassword': 'пароль: 123456',
 
     // Profile
     'profile.loading': 'Загрузка…',
