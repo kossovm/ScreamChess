@@ -14,6 +14,11 @@ import toast from 'react-hot-toast';
 interface Props {
   lang?: string;
   disabled?: boolean;
+  /**
+   * If set, voice can only execute moves for this colour, and only when it is
+   * its turn. Online play passes 'w' or 'b'; local hot-seat leaves it null.
+   */
+  playerSide?: 'w' | 'b' | null;
   onMove?: (move: { from: string; to: string }) => void;
   onUndo?: () => number;
   hotkey?: string;
@@ -33,7 +38,7 @@ const ERROR_KEY: Record<VoiceErrorCode, TranslationKey> = {
   'unknown': 'voice.error.unknown',
 };
 
-export default function VoiceControl({ lang, disabled, onMove, onUndo, hotkey = 'v' }: Props) {
+export default function VoiceControl({ lang, disabled, playerSide, onMove, onUndo, hotkey = 'v' }: Props) {
   const { locale, t } = useLanguage();
   const effectiveLang = lang ?? (locale === 'ru' ? 'ru-RU' : 'en-US');
 
@@ -53,6 +58,15 @@ export default function VoiceControl({ lang, disabled, onMove, onUndo, hotkey = 
     const parsed = parseVoiceCommand(transcriptText, chess);
     const emotion = inferEmotionFromVoice({ transcript: transcriptText, durationMs, confidence: voiceConf });
     setHistory((h) => [transcriptText, ...h].slice(0, 5));
+
+    // In online play, refuse voice moves when it isn't the player's turn —
+    // otherwise opponents could whisper into your mic and move for you, and the
+    // SAN parser would happily resolve "e2 e4" against the opponent's pieces.
+    const isMoveLike = parsed.type === 'move' || parsed.type === 'castle-k' || parsed.type === 'castle-q';
+    if (playerSide && isMoveLike && chess.turn() !== playerSide) {
+      toast.error(t('online.notYourTurn'));
+      return;
+    }
 
     if (parsed.type === 'move' && parsed.from && parsed.to) {
       const ok = makeMove({ from: parsed.from, to: parsed.to, promotion: 'q' }, emotion, voiceConf);

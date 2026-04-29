@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { v4 as uuid } from 'uuid';
-import { Briefcase, Coins, Link2, Loader2, Plus, Star, Swords } from 'lucide-react';
+import { Briefcase, Coins, Eye, EyeOff, Link2, Loader2, Plus, Star, Swords } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useT } from '@/components/LanguageProvider';
 import { useAuth } from '@/hooks/useAuth';
@@ -11,6 +11,16 @@ import { useUserEconomy } from '@/hooks/useUserEconomy';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const STAKE_OPTIONS = [0, 50, 100, 250, 500, 1000];
+
+interface OpenLobby {
+  room_id: string;
+  host_id: string;
+  host_name: string | null;
+  host_rating: number | null;
+  stake: number;
+  time_control_sec: number;
+  mode: string;
+}
 
 export default function OnlineLobby() {
   const router = useRouter();
@@ -20,22 +30,51 @@ export default function OnlineLobby() {
 
   const [code, setCode] = useState('');
   const [stake, setStake] = useState<number>(0);
+  const [privacy, setPrivacy] = useState<'open' | 'closed'>('open');
   const [searching, setSearching] = useState(false);
+  const [openLobbies, setOpenLobbies] = useState<OpenLobby[]>([]);
   const matchChannelRef = useRef<any>(null);
 
-  const setupHostMeta = (id: string, mode?: 'interview' | 'rated', extra?: { opponentId?: string; stake?: number }) => {
+  // Live subscription to public lobby list
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const refresh = async () => {
+      const { data } = await supabase
+        .from('open_lobbies')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      setOpenLobbies((data ?? []) as OpenLobby[]);
+    };
+    refresh();
+
+    const ch = supabase
+      .channel('open-lobbies-feed')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'open_lobbies' }, () => refresh())
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch);
+    };
+  }, []);
+
+  const setupHostMeta = (id: string, opts: { mode?: 'interview' | 'rated' | 'casual'; opponentId?: string; stake?: number; privacy?: 'open' | 'closed' }) => {
     if (typeof window === 'undefined') return;
     localStorage.setItem(`pvc-host-${id}`, '1');
-    if (mode) localStorage.setItem(`pvc-mode-${id}`, mode);
-    if (extra?.opponentId) localStorage.setItem(`pvc-opp-${id}`, extra.opponentId);
-    if (extra?.stake !== undefined) localStorage.setItem(`pvc-stake-${id}`, String(extra.stake));
+    if (opts.mode) localStorage.setItem(`pvc-mode-${id}`, opts.mode);
+    if (opts.opponentId) localStorage.setItem(`pvc-opp-${id}`, opts.opponentId);
+    if (opts.stake !== undefined) localStorage.setItem(`pvc-stake-${id}`, String(opts.stake));
+    if (opts.privacy) localStorage.setItem(`pvc-privacy-${id}`, opts.privacy);
   };
 
-  const create = (mode?: 'interview') => {
+  const create = async (mode?: 'interview') => {
     const id = uuid().slice(0, 8);
-    setupHostMeta(id, mode);
-    if (stake > 0 && !mode) {
-      // rated custom room
+    if (mode === 'interview') {
+      setupHostMeta(id, { mode: 'interview' });
+      router.push(`/play/online/${id}?mode=interview`);
+      return;
+    }
+    if (stake > 0) {
       if (!user) {
         toast.error(t('online.signInRequired'));
         return;
@@ -44,12 +83,46 @@ export default function OnlineLobby() {
         toast.error(t('online.notEnoughCoins'));
         return;
       }
-      localStorage.setItem(`pvc-mode-${id}`, 'rated');
-      localStorage.setItem(`pvc-stake-${id}`, String(stake));
-      router.push(`/play/online/${id}?rated=1&stake=${stake}`);
+    }
+    const isRated = stake > 0;
+    setupHostMeta(id, { mode: isRated ? 'rated' : 'casual', stake, privacy });
+    if (privacy === 'open' && user) {
+      // Try to publish to the open-lobbies feed; non-fatal if it fails.
+      const { error } = await supabase.from('open_lobbies').insert({
+        room_id: id,
+        host_id: user.id,
+        host_name: user.email?.split('@')[0] ?? 'player',
+        host_rating: economy?.rating ?? 10,
+        stake,
+        mode: isRated ? 'rated' : 'casual',
+      });
+      if (error) console.warn('open_lobbies insert failed:', error.message);
+    }
+    const params = new URLSearchParams();
+    if (isRated) params.set('rated', '1');
+    if (stake > 0) params.set('stake', String(stake));
+    const qs = params.toString();
+    router.push(`/play/online/${id}${qs ? `?${qs}` : ''}`);
+  };
+
+  const joinLobby = (lobby: OpenLobby) => {
+    if (!user) {
+      toast.error(t('online.signInRequired'));
       return;
     }
-    router.push(mode ? `/play/online/${id}?mode=${mode}` : `/play/online/${id}`);
+    if (lobby.stake > 0 && (!economy || economy.coins < lobby.stake)) {
+      toast.error(t('online.notEnoughCoins'));
+      return;
+    }
+    const params = new URLSearchParams();
+    if (lobby.mode === 'rated') params.set('rated', '1');
+    if (lobby.stake > 0) params.set('stake', String(lobby.stake));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`pvc-mode-${lobby.room_id}`, lobby.mode);
+      localStorage.setItem(`pvc-stake-${lobby.room_id}`, String(lobby.stake));
+      localStorage.setItem(`pvc-opp-${lobby.room_id}`, lobby.host_id);
+    }
+    router.push(`/play/online/${lobby.room_id}?${params.toString()}`);
   };
 
   const join = () => {
@@ -60,7 +133,7 @@ export default function OnlineLobby() {
     router.push(`/play/online/${code.trim()}`);
   };
 
-  // Matchmaking: subscribe to a global pool channel, wait for another user, pair up.
+  // Matchmaking
   const startSearch = async () => {
     if (!user) {
       toast.error(t('online.signInRequired'));
@@ -76,7 +149,6 @@ export default function OnlineLobby() {
       config: { presence: { key: user.id }, broadcast: { self: false } },
     });
     matchChannelRef.current = channel;
-
     let matched = false;
 
     const tryPair = () => {
@@ -86,19 +158,14 @@ export default function OnlineLobby() {
         .map(([key, vs]) => ({ key, joinedAt: vs[0]?.joinedAt ?? 0, rating: vs[0]?.rating ?? 0 }))
         .sort((a, b) => a.joinedAt - b.joinedAt);
       if (waiting.length < 2) return;
-      // I'm the matchmaker if I'm the earliest joiner
-      const me = waiting.find((w) => w.key === user.id);
-      if (!me) return;
-      if (waiting[0].key !== user.id) return; // someone else is matchmaker
+      if (waiting[0].key !== user.id) return;
       const other = waiting.find((w) => w.key !== user.id);
       if (!other) return;
       const roomId = uuid().slice(0, 8);
       matched = true;
-      // I become host; opponent receives the room id via broadcast
-      setupHostMeta(roomId, 'rated', { opponentId: other.key });
+      setupHostMeta(roomId, { mode: 'rated', opponentId: other.key });
       channel.send({ type: 'broadcast', event: 'matched', payload: { roomId, hostId: user.id, opponentId: other.key } });
       toast.success(t('online.matched'));
-      // small delay so the broadcast leaves before we navigate (and tear the channel down)
       setTimeout(() => {
         supabase.removeChannel(channel);
         matchChannelRef.current = null;
@@ -137,11 +204,11 @@ export default function OnlineLobby() {
     setSearching(false);
   };
 
-  useEffect(() => {
-    return () => {
-      if (matchChannelRef.current) supabase.removeChannel(matchChannelRef.current);
-    };
+  useEffect(() => () => {
+    if (matchChannelRef.current) supabase.removeChannel(matchChannelRef.current);
   }, []);
+
+  const visibleLobbies = openLobbies.filter((l) => !user || l.host_id !== user.id);
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-4xl">
@@ -151,24 +218,61 @@ export default function OnlineLobby() {
       {/* Player badge */}
       <div className="card mb-6 flex items-center justify-between">
         {user ? (
-          <>
-            <div>
-              <div className="text-sm text-gray-500 mb-0.5">{user.email}</div>
-              <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1.5 text-sm">
-                  <Star className="w-4 h-4 text-amber-500" /> <strong>{economy?.rating ?? '…'}</strong>
-                </span>
-                <span className="flex items-center gap-1.5 text-sm">
-                  <Coins className="w-4 h-4 text-yellow-500" /> <strong>{economy?.coins ?? '…'}</strong>
-                </span>
-              </div>
+          <div>
+            <div className="text-sm text-gray-500 mb-0.5">{user.email}</div>
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1.5 text-sm">
+                <Star className="w-4 h-4 text-amber-500" /> <strong>{economy?.rating ?? '…'}</strong>
+              </span>
+              <span className="flex items-center gap-1.5 text-sm">
+                <Coins className="w-4 h-4 text-yellow-500" /> <strong>{economy?.coins ?? '…'}</strong>
+              </span>
             </div>
-          </>
+          </div>
         ) : (
           <div className="text-sm text-gray-500">
             {t('online.signInRequired')} ·{' '}
             <a href="/login" className="text-accent-500 hover:underline">{t('header.signin')}</a>
           </div>
+        )}
+      </div>
+
+      {/* Open lobby browser */}
+      <div className="card mb-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Eye className="w-4 h-4 text-emerald-500" />
+          <h2 className="font-semibold">{t('online.openLobbies')}</h2>
+          <span className="text-xs text-gray-500">{visibleLobbies.length}</span>
+        </div>
+        {visibleLobbies.length === 0 ? (
+          <p className="text-sm text-gray-500">{t('online.openLobbies.empty')}</p>
+        ) : (
+          <ul className="space-y-2">
+            {visibleLobbies.map((l) => (
+              <li key={l.room_id} className="flex items-center justify-between border-t border-white/10 pt-2 first:border-0 first:pt-0">
+                <div className="flex items-center gap-3 text-sm flex-wrap">
+                  <span className="flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 text-amber-500" /> <strong>{l.host_rating ?? '?'}</strong>
+                  </span>
+                  <span className="text-gray-500">{t('online.openLobbies.host')}:</span>
+                  <span className="font-medium">{l.host_name ?? '—'}</span>
+                  {l.stake > 0 && (
+                    <span className="flex items-center gap-1 text-yellow-500">
+                      <Coins className="w-3.5 h-3.5" /> {l.stake}
+                    </span>
+                  )}
+                  {l.mode === 'rated' && (
+                    <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500">
+                      {t('online.ratedBadge')}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => joinLobby(l)} className="btn-primary text-xs py-1.5 px-3">
+                  {t('online.openLobbies.join')}
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
@@ -190,15 +294,13 @@ export default function OnlineLobby() {
               </h3>
               <p className="text-sm text-gray-500">{t('online.findOpponent.desc')}</p>
               {searching && (
-                <span className="inline-block mt-2 text-xs text-amber-500 underline">
-                  {t('online.cancelSearch')}
-                </span>
+                <span className="inline-block mt-2 text-xs text-amber-500 underline">{t('online.cancelSearch')}</span>
               )}
             </div>
           </div>
         </button>
 
-        {/* Create custom room with optional stake */}
+        {/* Create custom room */}
         <div className="card">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-accent-500 to-pink-500 flex items-center justify-center mb-3">
             <Plus className="w-6 h-6 text-white" />
@@ -207,38 +309,56 @@ export default function OnlineLobby() {
           <p className="text-sm text-gray-500 mb-3">{t('online.create.desc')}</p>
 
           {user && (
-            <div className="mb-3">
-              <label className="block text-xs text-gray-500 mb-1">{t('online.stake.label')}</label>
-              <div className="flex flex-wrap gap-1.5">
-                {STAKE_OPTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStake(s)}
-                    className={`text-xs py-1 px-2.5 rounded-full transition ${
-                      stake === s ? 'bg-amber-500 text-white' : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10'
-                    }`}
-                    disabled={!!economy && s > economy.coins}
-                  >
-                    {s === 0 ? t('online.timeControl.unlimited').split(' ')[0] : `${s} 💰`}
-                  </button>
-                ))}
+            <>
+              <div className="mb-3">
+                <label className="block text-xs text-gray-500 mb-1">{t('online.stake.label')}</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {STAKE_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setStake(s)}
+                      className={`text-xs py-1 px-2.5 rounded-full transition ${
+                        stake === s ? 'bg-amber-500 text-white' : 'bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10'
+                      }`}
+                      disabled={!!economy && s > economy.coins}
+                    >
+                      {s === 0 ? '0 💰' : `${s} 💰`}
+                    </button>
+                  ))}
+                </div>
               </div>
-              {stake > 0 && (
-                <p className="text-[11px] text-amber-500 mt-1.5">
-                  {t('online.ratedBadge')} · {t('online.stake')} {stake} 💰
+              <div className="mb-3">
+                <label className="block text-xs text-gray-500 mb-1">{t('online.privacy')}</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setPrivacy('open')}
+                    className={`text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                      privacy === 'open' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-black/5 dark:bg-white/5 border border-transparent'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" /> {t('online.privacy.open')}
+                  </button>
+                  <button
+                    onClick={() => setPrivacy('closed')}
+                    className={`text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition ${
+                      privacy === 'closed' ? 'bg-gray-500/20 text-gray-300 border border-gray-500/40' : 'bg-black/5 dark:bg-white/5 border border-transparent'
+                    }`}
+                  >
+                    <EyeOff className="w-3.5 h-3.5" /> {t('online.privacy.closed')}
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-1.5">
+                  {privacy === 'open' ? t('online.privacy.openHint') : t('online.privacy.closedHint')}
                 </p>
-              )}
-            </div>
+              </div>
+            </>
           )}
 
           <button onClick={() => create()} className="btn-primary w-full">{t('online.create')}</button>
         </div>
 
         {/* Interview mode */}
-        <button
-          onClick={() => create('interview')}
-          className="card text-left hover:scale-[1.02] transition-transform border border-amber-500/40"
-        >
+        <button onClick={() => create('interview')} className="card text-left hover:scale-[1.02] transition-transform border border-amber-500/40">
           <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center mb-3">
             <Briefcase className="w-6 h-6 text-white" />
           </div>

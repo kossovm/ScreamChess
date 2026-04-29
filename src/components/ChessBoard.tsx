@@ -45,8 +45,10 @@ export default function ChessBoard({ orientation = 'white', disabled, playerSide
   const isDraggablePiece = ({ piece }: { piece: string }) => {
     if (disabled || isGameOver) return false;
     const pieceColor = piece?.[0] as 'w' | 'b' | undefined;
+    // Only colour gating happens here — turn-order is enforced inside onPieceDrop
+    // so the user can pick up their pieces freely and just gets a toast if they
+    // try to drop out of turn.
     if (playerSide && pieceColor && pieceColor !== playerSide) return false;
-    if (playerSide && chess.turn() !== playerSide) return false;
     return true;
   };
 

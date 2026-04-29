@@ -265,6 +265,13 @@ export default function OnlineRoom() {
     if (isInterview && bothPlayersPresent) setVoiceEnabled(true);
   }, [isInterview, bothPlayersPresent]);
 
+  // Once a second player joins, remove this room from the public lobby list
+  // (host only — RLS allows them to delete their own row).
+  useEffect(() => {
+    if (!bothPlayersPresent || !isHost || !user || !isSupabaseConfigured) return;
+    supabase.from('open_lobbies').delete().eq('room_id', room).then(() => {});
+  }, [bothPlayersPresent, isHost, user, room]);
+
   // Compute clock state from history + currently elapsed
   const clock = useMemo(() => {
     if (!gameStarted || timeControlSec === 0) {
@@ -563,9 +570,17 @@ export default function OnlineRoom() {
           <VoiceChat roomId={room as string} enabled={voiceEnabled} signalingChannel={channelRef.current} />
           <VoiceControl
             disabled={movesDisabled}
+            playerSide={isPlayer ? (role as 'w' | 'b') : null}
             onMove={onMove}
             onUndo={() => {
-              if (!isPlayer) return 0;
+              if (!isPlayer || gameEnded || history.length === 0) return 0;
+              // Only allow undoing my own last move (one move at a time).
+              const lastMoverIndex = history.length - 1;
+              const lastMoverSide: 'w' | 'b' = lastMoverIndex % 2 === 0 ? 'w' : 'b';
+              if (lastMoverSide !== role) {
+                toast.error(t('online.notYourTurn'));
+                return 0;
+              }
               const popped = undo(1);
               if (popped > 0) broadcastUndo(1);
               return popped;
