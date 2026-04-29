@@ -102,6 +102,47 @@ export default function OnlineRoom() {
   const [iAmReady, setIAmReady] = useState(false);
   const [timeoutLoser, setTimeoutLoser] = useState<'w' | 'b' | null>(null);
 
+  // Restore game-in-progress state on mount so a refresh doesn't lock the player
+  // into "Ready" with a disabled board.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = localStorage.getItem(`pvc-game-${room}`);
+    if (!raw) return;
+    try {
+      const obj = JSON.parse(raw);
+      if (obj?.gameStarted) {
+        setGameStarted(true);
+        if (typeof obj.startedAt === 'number') setStartedAt(obj.startedAt);
+        if (typeof obj.timeControlSec === 'number') setTimeControlSec(obj.timeControlSec);
+      }
+    } catch {}
+  }, [room]);
+
+  // Persist game-in-progress so it survives reload.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (gameStarted) {
+      localStorage.setItem(`pvc-game-${room}`, JSON.stringify({
+        gameStarted: true,
+        startedAt,
+        timeControlSec,
+      }));
+    }
+  }, [gameStarted, startedAt, timeControlSec, room]);
+
+  // Persist the "I pressed Ready" flag too, so a reload before game-start
+  // doesn't dump the player back to "Not ready".
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const saved = localStorage.getItem(`pvc-ready-${room}`);
+    if (saved === '1') setIAmReady(true);
+  }, [room]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (iAmReady) localStorage.setItem(`pvc-ready-${room}`, '1');
+    else localStorage.removeItem(`pvc-ready-${room}`);
+  }, [iAmReady, room]);
+
   // Derive my role from sorted member list.
   const myRank = members.findIndex((m) => m.key === presenceKey);
   const role: Role = myRank === 0 ? 'w' : myRank === 1 ? 'b' : 'spectator';
@@ -121,17 +162,26 @@ export default function OnlineRoom() {
     return () => clearInterval(id);
   }, [gameStarted, isGameOver]);
 
-  // Reset board state when entering room
+  // Reset board state when entering room. Don't blow away gameStarted here —
+  // it's restored separately from localStorage so a reload mid-game keeps the
+  // board interactive.
   useEffect(() => {
     reset();
-    setGameStarted(false);
-    setStartedAt(null);
     setIAmReady(false);
-    setTimeoutLoser(null);
     setResignedSide(null);
     setRatingApplied(false);
     setRatingChange(null);
   }, [room, reset]);
+
+  // Wipe the saved "game in progress" flag when the game ends so the next
+  // session of the same room starts from the lobby cleanly.
+  useEffect(() => {
+    const ended = isGameOver || !!timeoutLoser || !!resignedSide;
+    if (ended && typeof window !== 'undefined') {
+      localStorage.removeItem(`pvc-game-${room}`);
+      localStorage.removeItem(`pvc-ready-${room}`);
+    }
+  }, [isGameOver, timeoutLoser, resignedSide, room]);
 
   // Re-broadcast identity once user becomes known (login flow).
   useEffect(() => {
@@ -166,6 +216,9 @@ export default function OnlineRoom() {
     channel
       .on('broadcast', { event: 'move' }, ({ payload }: any) => {
         if (payload?.from && payload?.to) {
+          // If a move arrives while we still think the game hasn't started
+          // (e.g. we reloaded), sync up so the board becomes interactive.
+          setGameStarted(true);
           makeMove({ from: payload.from, to: payload.to, promotion: payload.promotion ?? 'q' });
         }
       })
@@ -265,12 +318,37 @@ export default function OnlineRoom() {
     if (isInterview && bothPlayersPresent) setVoiceEnabled(true);
   }, [isInterview, bothPlayersPresent]);
 
-  // Once a second player joins, remove this room from the public lobby list
-  // (host only — RLS allows them to delete their own row).
+  // Lobby visibility lifecycle:
+  //  · while the host is alone in an open rated room → keep a row in open_lobbies
+  //  · when a second player joins → remove that row
+  //  · if the opponent leaves → re-publish so others can find it
   useEffect(() => {
-    if (!bothPlayersPresent || !isHost || !user || !isSupabaseConfigured) return;
-    supabase.from('open_lobbies').delete().eq('room_id', room).then(() => {});
-  }, [bothPlayersPresent, isHost, user, room]);
+    if (!isHost || !user || !isSupabaseConfigured) return;
+    if (typeof window === 'undefined') return;
+    const privacy = localStorage.getItem(`pvc-privacy-${room}`);
+    const mode = localStorage.getItem(`pvc-mode-${room}`);
+    if (privacy !== 'open') return;
+    if (gameStarted) return;
+
+    if (bothPlayersPresent) {
+      supabase.from('open_lobbies').delete().eq('room_id', room).then(() => {});
+    } else {
+      const stakeStored = parseInt(localStorage.getItem(`pvc-stake-${room}`) ?? '0', 10) || 0;
+      supabase
+        .from('open_lobbies')
+        .upsert({
+          room_id: room,
+          host_id: user.id,
+          host_name: user.email?.split('@')[0] ?? 'player',
+          host_rating: economy?.rating ?? 10,
+          stake: stakeStored,
+          mode: mode || (stakeStored > 0 ? 'rated' : 'casual'),
+        })
+        .then(({ error }: any) => {
+          if (error) console.warn('open_lobbies upsert failed:', error.message);
+        });
+    }
+  }, [bothPlayersPresent, isHost, user, room, economy?.rating, gameStarted]);
 
   // Compute clock state from history + currently elapsed
   const clock = useMemo(() => {
@@ -567,7 +645,12 @@ export default function OnlineRoom() {
               blackLabel={blackName}
             />
           )}
-          <VoiceChat roomId={room as string} enabled={voiceEnabled} signalingChannel={channelRef.current} />
+          <VoiceChat
+            roomId={room as string}
+            enabled={voiceEnabled && bothPlayersPresent}
+            initiator={role === 'w'}
+            signalingChannel={channelRef.current}
+          />
           <VoiceControl
             disabled={movesDisabled}
             playerSide={isPlayer ? (role as 'w' | 'b') : null}

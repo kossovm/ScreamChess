@@ -11,7 +11,7 @@ import toast from 'react-hot-toast';
 export default function LoginPage() {
   const router = useRouter();
   const t = useT();
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
+  const { signInWithEmail, signUpWithEmail } = useAuth();
   const [mode, setMode] = useState<'in' | 'up'>('in');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -54,7 +54,6 @@ export default function LoginPage() {
             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
             {mode === 'in' ? t('login.signin') : t('login.signup')}
           </button>
-          <button onClick={signInWithGoogle} className="btn-ghost w-full">{t('login.google')}</button>
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-6">

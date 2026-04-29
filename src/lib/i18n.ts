@@ -131,6 +131,11 @@ const dict = {
     'profile.charityReceived': '+1000 coins received',
     'profile.charityAlreadyUsed': 'Already received the handout',
     'profile.charityNotEligible': 'Only available when coins drop below 1000',
+    'profile.city': 'City',
+    'profile.cityPlaceholder': 'e.g. Almaty',
+    'profile.cityUpdated': 'City saved',
+    'profile.save': 'Save',
+    'profile.editCity': 'Set city',
 
     // Interview
     'interview.banner': 'Interview Mode · 5 min',
@@ -407,6 +412,11 @@ const dict = {
     'profile.charityReceived': '+1000 монет зачислено',
     'profile.charityAlreadyUsed': 'Помощь уже получена ранее',
     'profile.charityNotEligible': 'Доступно только при балансе меньше 1000',
+    'profile.city': 'Город',
+    'profile.cityPlaceholder': 'например, Алматы',
+    'profile.cityUpdated': 'Город сохранён',
+    'profile.save': 'Сохранить',
+    'profile.editCity': 'Указать город',
 
     // Interview
     'interview.banner': 'Режим интервью · 5 мин',

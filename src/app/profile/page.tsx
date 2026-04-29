@@ -5,16 +5,19 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserEconomy } from '@/hooks/useUserEconomy';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useT } from '@/components/LanguageProvider';
-import { Brain, Coins, HandCoins, Star, Trophy, User } from 'lucide-react';
+import { Brain, Coins, HandCoins, MapPin, Pencil, Star, Trophy, User } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
   const { user, loading } = useAuth();
   const t = useT();
-  const { economy, requestCharity } = useUserEconomy();
+  const { economy, requestCharity, refresh } = useUserEconomy();
   const [games, setGames] = useState<any[]>([]);
   const [profile, setProfile] = useState<any>(null);
+  const [city, setCity] = useState('');
+  const [editingCity, setEditingCity] = useState(false);
+  const [savingCity, setSavingCity] = useState(false);
   const [charityLoading, setCharityLoading] = useState(false);
 
   useEffect(() => {
@@ -27,8 +30,10 @@ export default function ProfilePage() {
         .order('created_at', { ascending: false })
         .limit(20);
       setGames(g ?? []);
-      const { data: p } = await supabase.from('psycho_profiles').select('*').eq('user_id', user.id).single();
-      setProfile(p ?? null);
+      const { data: psy } = await supabase.from('psycho_profiles').select('*').eq('user_id', user.id).single();
+      setProfile(psy ?? null);
+      const { data: prof } = await supabase.from('profiles').select('city').eq('id', user.id).single();
+      if (prof?.city) setCity(prof.city);
     })();
   }, [user]);
 
@@ -36,14 +41,24 @@ export default function ProfilePage() {
     setCharityLoading(true);
     const res = await requestCharity();
     setCharityLoading(false);
-    if (res.ok) {
-      toast.success(t('profile.charityReceived'));
-    } else if (res.error === 'already_used') {
-      toast.error(t('profile.charityAlreadyUsed'));
-    } else if (res.error === 'not_eligible') {
-      toast(t('profile.charityNotEligible'));
+    if (res.ok) toast.success(t('profile.charityReceived'));
+    else if (res.error === 'already_used') toast.error(t('profile.charityAlreadyUsed'));
+    else if (res.error === 'not_eligible') toast(t('profile.charityNotEligible'));
+    else toast.error(res.error ?? 'Error');
+  };
+
+  const saveCity = async () => {
+    if (!user) return;
+    setSavingCity(true);
+    const trimmed = city.trim().slice(0, 60);
+    const { error } = await supabase.from('profiles').update({ city: trimmed || null }).eq('id', user.id);
+    setSavingCity(false);
+    if (error) {
+      toast.error(error.message);
     } else {
-      toast.error(res.error ?? 'Error');
+      toast.success(t('profile.cityUpdated'));
+      setEditingCity(false);
+      refresh();
     }
   };
 
@@ -65,10 +80,40 @@ export default function ProfilePage() {
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-600 to-accent-600 flex items-center justify-center">
           <User className="w-8 h-8 text-white" />
         </div>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-display font-bold">{user.email}</h1>
           <p className="text-sm text-gray-500">{t('profile.memberSince')} {new Date(user.created_at!).toLocaleDateString()}</p>
         </div>
+      </div>
+
+      {/* City editor */}
+      <div className="card mb-6 flex items-center gap-3">
+        <MapPin className="w-5 h-5 text-emerald-500 shrink-0" />
+        <div className="flex-1">
+          <div className="text-xs text-gray-500 mb-0.5">{t('profile.city')}</div>
+          {editingCity ? (
+            <div className="flex gap-2">
+              <input
+                value={city}
+                onChange={(e) => setCity(e.target.value)}
+                placeholder={t('profile.cityPlaceholder')}
+                className="input flex-1 text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && saveCity()}
+                autoFocus
+              />
+              <button onClick={saveCity} disabled={savingCity} className="btn-primary text-sm py-1.5 px-3">
+                {savingCity ? '…' : t('profile.save')}
+              </button>
+            </div>
+          ) : (
+            <div className="font-medium">{city || <span className="text-gray-500 italic">—</span>}</div>
+          )}
+        </div>
+        {!editingCity && (
+          <button onClick={() => setEditingCity(true)} className="btn-ghost p-2" aria-label={t('profile.editCity')}>
+            <Pencil className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
